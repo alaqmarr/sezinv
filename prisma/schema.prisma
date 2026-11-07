@@ -1,0 +1,574 @@
+// SEZSEC Jamaat Events & Inventory SQLite Schema
+// Retains all shared Jamaat portal tables + adds Decorator Details, Decrypted Amounts, and SQLite Activity Logs.
+
+generator client {
+  provider = "prisma-client"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "sqlite"
+}
+
+// ----------------------------------------------------------------------
+// Enums
+// ----------------------------------------------------------------------
+
+enum Role {
+  ADMIN
+  ADMIN_CUSTOM
+  MANAGER
+  STAFF
+  WATCHER
+  USER
+}
+
+enum ProfileStatus {
+  COMPLETED
+  SKIPPED
+}
+
+enum CrockeryStatus {
+  PENDING
+  NOT_REQUIRED
+  COMPLETED
+}
+
+enum EventStatus {
+  BOOKED
+  CANCELLED
+  COMPLETED
+}
+
+enum EventType {
+  PUBLIC
+  PRIVATE
+}
+
+enum FeeStatus {
+  PENDING
+  PARTIAL
+  PAID
+}
+
+enum ApprovalStatus {
+  PENDING
+  APPROVED
+  REJECTED
+}
+
+enum AttendanceStatus {
+  PRESENT
+  ABSENT
+  EXCUSED
+}
+
+// ----------------------------------------------------------------------
+// Core & Shared Models
+// ----------------------------------------------------------------------
+
+model User {
+  id            String         @id @default(cuid())
+  username      String         @unique
+  password      String
+  email         String?
+  mobile        String?
+  name          String?
+  role          Role           @default(STAFF)
+  profileStatus ProfileStatus?
+  createdAt     DateTime       @default(now())
+  updatedAt     DateTime       @updatedAt
+
+  // Retained shared Jamaat member profile columns
+  dob           DateTime?
+  quranHifz     String?
+  passport      String?
+  kunSafar      String?
+  occupation    String?
+  sports        String?
+
+  events             Event[]             @relation("CreatedBy")
+  moduleAccess       UserModuleAccess[]
+
+  feeConfig          UserFeeConfig?
+  feeRecords         FeeRecord[]
+  eventContributions EventContribution[]
+  feeTransactions    FeeTransaction[]
+
+  // Attendance & Structure (retained for shared Jamaat portal compatibility)
+  its           String?        @unique
+  headedById    String?
+  headedBy      User?          @relation("UserHeads", fields: [headedById], references: [id])
+  usersGuided   User[]         @relation("UserHeads")
+
+  floorHeadOf    FloorConfig[] @relation("FloorHeads")
+  floorSubHeadOf FloorConfig[] @relation("FloorSubHeads")
+  floorMemberOf  FloorConfig[] @relation("FloorMembers")
+
+  attendanceRecords AttendanceRecord[] @relation("Attendee")
+  attendanceMarked  AttendanceRecord[] @relation("Marker")
+
+  @@index([headedById])
+  @@map("users")
+}
+
+model InventoryItem {
+  id                String   @id @default(cuid())
+  name              String
+  category          String
+  totalQuantity     Int
+  availableQuantity Int
+  unit              String   @default("pcs")
+  createdAt         DateTime @default(now())
+  updatedAt         DateTime @updatedAt
+
+  eventAllocations  EventInventory[]
+
+  @@index([category])
+  @@map("inventory_items")
+}
+
+model EventInventory {
+  id            String        @id @default(cuid())
+  eventId       String
+  event         Event         @relation(fields: [eventId], references: [id], onDelete: Cascade)
+  itemId        String
+  item          InventoryItem @relation(fields: [itemId], references: [id], onDelete: Cascade)
+
+  issuedQty     Int           @default(0)
+  returnedQty   Int           @default(0)
+  lostQty       Int           @default(0)
+  recoveredQty  Int           @default(0)
+
+  createdAt     DateTime      @default(now())
+  updatedAt     DateTime      @updatedAt
+
+  @@unique([eventId, itemId])
+  @@index([itemId])
+  @@map("event_inventory")
+}
+
+model Event {
+  id                  String         @id @default(cuid())
+  reference           String?        @unique
+
+  name                String
+  mobile              String
+  email               String?
+  occasionDate        DateTime
+  occasionDay         String?
+  occasionTime        String
+  description         String
+  // Stored as JSON string[] in SQLite (mapped seamlessly from PostgreSQL String[])
+  hall                Json
+
+  catererName         String
+  catererPhone        String
+  catererId           String?
+  caterer             Caterer?       @relation(fields: [catererId], references: [id], onDelete: SetNull)
+
+  // New Decorator Details (when decorations = true and venue is not Self)
+  decoratorName       String?
+  decoratorPhone      String?
+  decoratorId         String?
+  decorator           Decorator?     @relation(fields: [decoratorId], references: [id], onDelete: SetNull)
+
+  thaalCount          Int            @default(0)
+  totalThaalsDone     Int?
+  sarkariThaalSet     Int            @default(0)
+  bhaiSaabIzzan       Boolean        @default(false)
+  muraqebeenIzzan     Boolean        @default(false)
+  benSaabIzzan        Boolean        @default(false)
+  extraChilamchiLota  Int            @default(0)
+  tablesAndChairs     Int            @default(0)
+  mic                 Boolean        @default(false)
+  crockeryRequired    Boolean        @default(false)
+  thaalForDevri       Boolean        @default(false)
+  paat                Boolean        @default(false)
+  masjidLight         Boolean        @default(false)
+  crockeryStatus      CrockeryStatus @default(NOT_REQUIRED)
+
+  acStartTime         String?
+  partyTime           String?
+  decorations         Boolean        @default(false)
+  gasCount            Int?
+  menu                String?
+
+  status              EventStatus    @default(BOOKED)
+  eventType           EventType      @default(PRIVATE)
+  hallCounts          Json?
+
+  // Decrypted Financial Amounts (stored unencrypted in SQLite; revealed only after Email OTP verification)
+  thaalRate           Int            @default(0)
+  thaalAmount         Int            @default(0)
+  sarkariRate         Int            @default(0)
+  sarkariAmount       Int            @default(0)
+  kitchenCharge       Int            @default(0)
+  decorationCharge    Int            @default(0)
+  otherCharge         Int            @default(0)
+  hallCharges         Json?
+  totalAmount         Int            @default(0)
+  depositAmount       Int            @default(0)
+  depositStatus       String         @default("NONE")
+  amountNotes         String?
+
+  // Payment Info
+  paymentMode         String?
+  transactionId       String?
+
+  razaGranted         Boolean        @default(false)
+  refundedDate        DateTime?
+
+  createdAt           DateTime       @default(now())
+  updatedAt           DateTime       @updatedAt
+
+  createdBy           User?          @relation("CreatedBy", fields: [createdById], references: [id])
+  createdById         String?
+
+  inventoryAllocations EventInventory[]
+  attendanceRecords    AttendanceRecord[]
+  attendanceClone      AttendanceEventClone?
+
+  @@index([occasionDate])
+  @@index([status, occasionDate])
+  @@index([createdById])
+  @@index([catererId])
+  @@index([decoratorId])
+  @@map("events")
+}
+
+model Caterer {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  phone  String
+  events Event[]
+
+  @@map("caterers")
+}
+
+model Decorator {
+  id     String  @id @default(cuid())
+  name   String  @unique
+  phone  String
+  events Event[]
+
+  @@map("decorators")
+}
+
+model Hall {
+  id         String      @id @default(cuid())
+  name       String      @unique
+  width      Float?
+  length     Float?
+  floorPlans FloorPlan[]
+
+  @@map("halls")
+}
+
+model FloorPlan {
+  id          String   @id @default(cuid())
+  name        String
+  hallId      String
+  hall        Hall     @relation(fields: [hallId], references: [id], onDelete: Cascade)
+  data        Json
+  width       Float
+  length      Float
+  isPublic    Boolean  @default(false)
+  publicToken String?  @unique
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@index([hallId])
+  @@map("floor_plans")
+}
+
+model FloorItemType {
+  id        String   @id @default(cuid())
+  name      String
+  type      String
+  width     Float
+  length    Float
+  color     String?
+  icon      String?
+  createdAt DateTime @default(now())
+
+  @@map("floor_item_types")
+}
+
+model Config {
+  id    String @id @default(cuid())
+  key   String @unique
+  value String
+
+  @@map("config")
+}
+
+// Replaces Firebase Realtime Database logs & event_logs completely
+model ActivityLog {
+  id        String   @id @default(cuid())
+  action    String
+  summary   String
+  userId    String
+  userName  String
+  eventId   String?
+  itemId    String?
+  details   Json?
+  timestamp Float
+  createdAt DateTime @default(now())
+
+  @@index([timestamp])
+  @@index([eventId, timestamp])
+  @@index([action])
+  @@map("activity_logs")
+}
+
+// ----------------------------------------------------------------------
+// Retained Shared Portal Models (Members, Khidmat, Blogs, Banners, Fees, Attendance)
+// ----------------------------------------------------------------------
+
+model KhidmatRequest {
+  id        String         @id @default(cuid())
+  miqat     String
+  name      String
+  phone     String
+  date      DateTime
+  status    ApprovalStatus @default(PENDING)
+  createdAt DateTime       @default(now())
+  updatedAt DateTime       @updatedAt
+
+  @@index([status])
+  @@map("khidmat_requests")
+}
+
+model MemberRegistration {
+  id          String         @id @default(cuid())
+  title       String
+  name        String
+  its         String         @unique
+  email       String
+  dob         DateTime
+  phone       String
+  quranHifz   String
+  passport    String
+  kunSafar    String
+  occupation  String
+  sports      String
+  status      ApprovalStatus @default(PENDING)
+  createdAt   DateTime       @default(now())
+  updatedAt   DateTime       @updatedAt
+
+  @@index([status])
+  @@map("member_registrations")
+}
+
+model Blog {
+  id          String   @id @default(cuid())
+  title       String
+  content     String
+  author      String
+  publishedAt DateTime @default(now())
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("blogs")
+}
+
+model Banner {
+  id              String    @id @default(cuid())
+  imageUrl        String
+  href            String?
+  isActive        Boolean   @default(false)
+  countdownTarget DateTime?
+  countdownLabel  String?
+  x               Float?    @default(50)
+  y               Float?    @default(50)
+  countdownSize   String?   @default("normal")
+  countdownColor  String?   @default("gold")
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@map("banners")
+}
+
+model Module {
+  id          String   @id
+  name        String   @unique
+  description String?
+  icon        String?
+  createdAt   DateTime @default(now())
+
+  links       ModuleLink[]
+  userAccess  UserModuleAccess[]
+
+  @@map("modules")
+}
+
+model ModuleLink {
+  id        String @id @default(cuid())
+  moduleId  String
+  module    Module @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  path      String
+  label     String?
+  order     Int    @default(0)
+
+  @@index([moduleId, order])
+  @@map("module_links")
+}
+
+model UserModuleAccess {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  moduleId  String
+  module    Module   @relation(fields: [moduleId], references: [id], onDelete: Cascade)
+  createdAt DateTime @default(now())
+
+  @@unique([userId, moduleId])
+  @@index([moduleId])
+  @@map("user_module_access")
+}
+
+model VerificationCode {
+  id        String   @id @default(cuid())
+  email     String
+  codeHash  String   @map("code")
+  purpose   String   @default("OTP")
+  userId    String?
+  attempts  Int      @default(0)
+  expiresAt DateTime
+  createdAt DateTime @default(now())
+
+  @@index([email, purpose])
+  @@index([userId, purpose])
+  @@index([expiresAt])
+  @@map("verification_codes")
+}
+
+model UserFeeConfig {
+  id        String   @id @default(cuid())
+  userId    String   @unique
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int      @default(0)
+  updatedAt DateTime @updatedAt
+
+  @@map("user_fee_configs")
+}
+
+model FeeRecord {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  month       Int
+  year        Int
+  amount      Int
+  paidAmount  Int       @default(0)
+  status      FeeStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  allocations FeeTransactionAllocation[]
+
+  @@unique([userId, month, year])
+  @@map("fee_records")
+}
+
+model FeeTransaction {
+  id        String   @id @default(cuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  amount    Int
+  mode      String
+  reference String?
+  note      String?
+  date      DateTime @default(now())
+
+  allocations FeeTransactionAllocation[]
+
+  @@index([userId, date])
+  @@map("fee_transactions")
+}
+
+model EventContribution {
+  id          String    @id @default(cuid())
+  userId      String
+  user        User      @relation(fields: [userId], references: [id], onDelete: Cascade)
+  title       String
+  amount      Int
+  paidAmount  Int       @default(0)
+  status      FeeStatus @default(PENDING)
+  createdAt   DateTime  @default(now())
+  updatedAt   DateTime  @updatedAt
+
+  allocations FeeTransactionAllocation[]
+
+  @@index([userId])
+  @@map("event_contributions")
+}
+
+model FeeTransactionAllocation {
+  id                  String             @id @default(cuid())
+  transactionId       String
+  transaction         FeeTransaction     @relation(fields: [transactionId], references: [id], onDelete: Cascade)
+
+  feeRecordId         String?
+  feeRecord           FeeRecord?         @relation(fields: [feeRecordId], references: [id], onDelete: Cascade)
+
+  eventContributionId String?
+  eventContribution   EventContribution? @relation(fields: [eventContributionId], references: [id], onDelete: Cascade)
+
+  allocatedAmount     Int
+
+  @@index([transactionId])
+  @@index([feeRecordId])
+  @@index([eventContributionId])
+  @@map("fee_transaction_allocations")
+}
+
+model FloorConfig {
+  id          String   @id @default(cuid())
+  name        String   @unique
+
+  heads       User[]   @relation("FloorHeads")
+  subHeads    User[]   @relation("FloorSubHeads")
+  members     User[]   @relation("FloorMembers")
+
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("floor_configs")
+}
+
+model AttendanceRecord {
+  id          String           @id @default(cuid())
+
+  eventId     String
+  event       Event            @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  userId      String
+  user        User             @relation("Attendee", fields: [userId], references: [id], onDelete: Cascade)
+
+  markedById  String?
+  markedBy    User?            @relation("Marker", fields: [markedById], references: [id])
+
+  status      AttendanceStatus @default(PRESENT)
+  timestamp   DateTime         @default(now())
+
+  @@unique([eventId, userId])
+  @@index([userId])
+  @@index([markedById])
+  @@map("attendance_records")
+}
+
+model AttendanceEventClone {
+  id          String   @id @default(cuid())
+
+  eventId     String   @unique
+  event       Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  isActive    Boolean  @default(true)
+  startTime   DateTime
+  endTime     DateTime
+  createdAt   DateTime @default(now())
+
+  @@map("attendance_event_clones")
+}

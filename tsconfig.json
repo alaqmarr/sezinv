@@ -1,6 +1,6 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
+    "target": "ES2022",
     "lib": ["dom", "dom.iterable", "esnext"],
     "allowJs": true,
     "skipLibCheck": true,
@@ -19,7 +19,41 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": ["./src/*"],
+      "@sezsec/db": ["./src/modules/db/db.module.ts"],
+      "@sezsec/db/*": ["./src/modules/db/*"],
+      "@sezsec/shared": ["./src/modules/shared/shared.module.ts"],
+      "@sezsec/shared/*": ["./src/modules/shared/*"],
+      "@sezsec/ui": ["./src/modules/ui/ui.module.ts"],
+      "@sezsec/ui/*": ["./src/modules/ui/*"],
+      "@sezsec/auth": ["./src/modules/auth/auth.module.ts"],
+      "@sezsec/auth/*": ["./src/modules/auth/*"],
+      "@sezsec/rbac": ["./src/modules/rbac/rbac.module.ts"],
+      "@sezsec/rbac/*": ["./src/modules/rbac/*"],
+      "@sezsec/logs": ["./src/modules/logs/logs.module.ts"],
+      "@sezsec/logs/*": ["./src/modules/logs/*"],
+      "@sezsec/notifications": ["./src/modules/notifications/notifications.module.ts"],
+      "@sezsec/notifications/*": ["./src/modules/notifications/*"],
+      "@sezsec/finance": ["./src/modules/finance/finance.module.ts"],
+      "@sezsec/finance/*": ["./src/modules/finance/*"],
+      "@sezsec/events": ["./src/modules/events/events.module.ts"],
+      "@sezsec/events/*": ["./src/modules/events/*"],
+      "@sezsec/inventory": ["./src/modules/inventory/inventory.module.ts"],
+      "@sezsec/inventory/*": ["./src/modules/inventory/*"],
+      "@sezsec/floor-plan": ["./src/modules/floor-plan/floor-plan.module.ts"],
+      "@sezsec/floor-plan/*": ["./src/modules/floor-plan/*"],
+      "@sezsec/calendar": ["./src/modules/calendar/calendar.module.ts"],
+      "@sezsec/calendar/*": ["./src/modules/calendar/*"],
+      "@sezsec/print": ["./src/modules/print/print.module.ts"],
+      "@sezsec/print/*": ["./src/modules/print/*"],
+      "@sezsec/users": ["./src/modules/users/users.module.ts"],
+      "@sezsec/users/*": ["./src/modules/users/*"],
+      "@sezsec/settings": ["./src/modules/settings/settings.module.ts"],
+      "@sezsec/settings/*": ["./src/modules/settings/*"],
+      "@sezsec/migration": ["./src/modules/migration/migration.module.ts"],
+      "@sezsec/migration/*": ["./src/modules/migration/*"],
+      "@sezsec/bridge": ["./src/modules/bridge/bridge.module.ts"],
+      "@sezsec/bridge/*": ["./src/modules/bridge/*"]
     }
   },
   "include": [
