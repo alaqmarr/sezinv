@@ -18,7 +18,7 @@ async function EventDetailContent({
   const user = await requireServerPageAccess("/events/[id]");
   const { id } = await paramsPromise;
   const decodedId = decodeURIComponent(id);
-  const unlock = await getAmountUnlockStatus(user.id);
+  const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
 
   const [event, logs] = await Promise.all([
     getEventById(decodedId, unlock.unlocked),
@@ -33,7 +33,9 @@ async function EventDetailContent({
       logs={logs}
       amountsUnlocked={unlock.unlocked}
       canEdit={canPerformAction("event:edit", user.role)}
-      canEditCharges={canPerformAction("event:costs:edit", user.role)}
+      canEditCharges={
+        user.canViewCharges && canPerformAction("event:costs:edit", user.role)
+      }
       canDelete={canPerformAction("event:delete", user.role)}
       canManageVessels={canPerformAction("inventory:issue-return", user.role)}
     />

@@ -10,8 +10,22 @@ export async function PATCH(
   const auth = await requireApiAuth(["ADMIN", "ADMIN_CUSTOM", "MANAGER"]);
   if (!auth.ok) return auth.response;
 
+  if (!auth.user.canViewCharges) {
+    return NextResponse.json(
+      {
+        error:
+          "You do not have access to Event Charges. Please ask an Administrator to enable the Event Charges module on your account.",
+      },
+      { status: 403 }
+    );
+  }
+
   const { id } = await context.params;
-  const unlock = await getEventAmountUnlockStatus(auth.user.id, id);
+  const unlock = await getEventAmountUnlockStatus(
+    auth.user.id,
+    id,
+    auth.user.canViewCharges
+  );
   if (!unlock.unlocked) {
     return NextResponse.json(
       {

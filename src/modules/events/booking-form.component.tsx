@@ -33,6 +33,7 @@ import {
   notify,
 } from "@sezsec/ui";
 import { AmountAccessBar, calculateEventAmounts } from "@sezsec/finance";
+import { usePermissions } from "@sezsec/rbac";
 import type { HallConflictWarning, PortalEvent } from "./events.types";
 
 interface DirectoryEntry {
@@ -59,6 +60,7 @@ export function EventBookingForm({
   amountsUnlocked: boolean;
 }) {
   const router = useRouter();
+  const { canViewCharges } = usePermissions();
 
   const [name, setName] = useState(initialEvent?.name || "");
   const [mobile, setMobile] = useState(initialEvent?.mobile || "");
@@ -166,8 +168,9 @@ export function EventBookingForm({
     initialEvent?.masjidLight ?? false
   );
 
-  // Charges (stored decrypted in SQLite; visible in Edit mode only after Email OTP)
-  const canEditChargesNow = mode === "create" || amountsUnlocked;
+  // Charges (stored decrypted in SQLite; visible only to accounts with Event Charges module)
+  const canEditChargesNow =
+    canViewCharges && (mode === "create" || amountsUnlocked);
   const [thaalRate, setThaalRate] = useState(
     String(initialEvent?.thaalRate || 0)
   );
@@ -419,7 +422,9 @@ export function EventBookingForm({
       if (mode === "create") {
         notify.success(
           "Booking saved — opening print page",
-          "Charges remain visible on this booking for the next 10 minutes so you can print right away."
+          canViewCharges
+            ? "Charges remain visible on this booking for the next 10 minutes so you can print right away."
+            : "Opening printable confirmation form and Do's & Don'ts."
         );
         router.push(`/events/${encodeURIComponent(data.event.id)}/print`);
       } else {
@@ -869,139 +874,141 @@ export function EventBookingForm({
         </CardBody>
       </Card>
 
-      {/* 5. Charges & Deposit */}
-      <Card accentTop>
-        <CardHeader
-          title="5. Booking Charges & Security Deposit"
-          subtitle="Saved with the booking and protected by email verification"
-        />
-        <CardBody className="space-y-4">
-          {!canEditChargesNow ? (
-            <AmountAccessBar unlocked={false} />
-          ) : (
-            <>
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
-                <Input
-                  label={`Rate per Thaal (${thaalCount})`}
-                  value={thaalRate}
-                  onChange={(e) => setThaalRate(digitsOnly(e.target.value))}
-                  leftAddon="₹"
-                  hint={`Total: ${formatRupees(computedAmounts.thaalAmount)}`}
-                />
-                <Input
-                  label={`Rate per Sarkari (${sarkariThaalSet})`}
-                  value={sarkariRate}
-                  onChange={(e) => setSarkariRate(digitsOnly(e.target.value))}
-                  leftAddon="₹"
-                  hint={`Total: ${formatRupees(computedAmounts.sarkariAmount)}`}
-                />
-                <Input
-                  label="Kitchen / Gas Charge"
-                  value={kitchenCharge}
-                  onChange={(e) => setKitchenCharge(digitsOnly(e.target.value))}
-                  leftAddon="₹"
-                />
-                <Input
-                  label="Decoration Charge"
-                  value={decorationCharge}
-                  onChange={(e) => setDecorationCharge(digitsOnly(e.target.value))}
-                  leftAddon="₹"
-                />
-                <Input
-                  label="Other Charges"
-                  value={otherCharge}
-                  onChange={(e) => setOtherCharge(digitsOnly(e.target.value))}
-                  leftAddon="₹"
-                />
-              </div>
-
-              {chargeableHalls.length > 0 ? (
-                <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-                  {chargeableHalls.map((h) => (
-                    <Input
-                      key={h}
-                      label={`${h} Charge`}
-                      value={hallCharges[h] || "0"}
-                      onChange={(e) =>
-                        setHallCharges((prev) => ({
-                          ...prev,
-                          [h]: digitsOnly(e.target.value),
-                        }))
-                      }
-                      leftAddon="₹"
-                    />
-                  ))}
-                </div>
-              ) : null}
-
-              <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
-                <Input
-                  label="Refundable Deposit"
-                  value={depositAmount}
-                  onChange={(e) => setDepositAmount(digitsOnly(e.target.value))}
-                  leftAddon="₹"
-                />
-                <Select
-                  label="Deposit Status"
-                  value={depositStatus}
-                  onChange={(v) =>
-                    setDepositStatus(v as "NONE" | "HELD" | "REFUNDED")
-                  }
-                  options={[
-                    { value: "NONE", label: "No Deposit" },
-                    { value: "HELD", label: "Deposit Collected" },
-                    { value: "REFUNDED", label: "Deposit Returned" },
-                  ]}
-                />
-                <Select
-                  label="Payment Method"
-                  value={paymentMode}
-                  onChange={setPaymentMode}
-                  options={[
-                    { value: "CASH", label: "Cash" },
-                    { value: "UPI", label: "UPI / Online Transfer" },
-                  ]}
-                />
-                {paymentMode === "UPI" ? (
+      {/* 5. Charges & Deposit (Visible only to accounts with Event Charges access) */}
+      {canViewCharges ? (
+        <Card accentTop>
+          <CardHeader
+            title="5. Booking Charges & Security Deposit"
+            subtitle="Saved with the booking and protected by email verification"
+          />
+          <CardBody className="space-y-4">
+            {!canEditChargesNow ? (
+              <AmountAccessBar unlocked={false} />
+            ) : (
+              <>
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3 xl:grid-cols-5">
                   <Input
-                    label="UPI Reference No."
-                    value={transactionId}
-                    onChange={(e) => setTransactionId(e.target.value)}
-                    placeholder="Transaction Ref ID"
+                    label={`Rate per Thaal (${thaalCount})`}
+                    value={thaalRate}
+                    onChange={(e) => setThaalRate(digitsOnly(e.target.value))}
+                    leftAddon="₹"
+                    hint={`Total: ${formatRupees(computedAmounts.thaalAmount)}`}
                   />
+                  <Input
+                    label={`Rate per Sarkari (${sarkariThaalSet})`}
+                    value={sarkariRate}
+                    onChange={(e) => setSarkariRate(digitsOnly(e.target.value))}
+                    leftAddon="₹"
+                    hint={`Total: ${formatRupees(computedAmounts.sarkariAmount)}`}
+                  />
+                  <Input
+                    label="Kitchen / Gas Charge"
+                    value={kitchenCharge}
+                    onChange={(e) => setKitchenCharge(digitsOnly(e.target.value))}
+                    leftAddon="₹"
+                  />
+                  <Input
+                    label="Decoration Charge"
+                    value={decorationCharge}
+                    onChange={(e) => setDecorationCharge(digitsOnly(e.target.value))}
+                    leftAddon="₹"
+                  />
+                  <Input
+                    label="Other Charges"
+                    value={otherCharge}
+                    onChange={(e) => setOtherCharge(digitsOnly(e.target.value))}
+                    leftAddon="₹"
+                  />
+                </div>
+
+                {chargeableHalls.length > 0 ? (
+                  <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+                    {chargeableHalls.map((h) => (
+                      <Input
+                        key={h}
+                        label={`${h} Charge`}
+                        value={hallCharges[h] || "0"}
+                        onChange={(e) =>
+                          setHallCharges((prev) => ({
+                            ...prev,
+                            [h]: digitsOnly(e.target.value),
+                          }))
+                        }
+                        leftAddon="₹"
+                      />
+                    ))}
+                  </div>
                 ) : null}
-              </div>
 
-              <Input
-                label="Charge Notes (Optional)"
-                value={amountNotes}
-                onChange={(e) => setAmountNotes(e.target.value)}
-                placeholder="Any payment or deposit remarks..."
-              />
+                <div className="grid grid-cols-1 gap-4 sm:grid-cols-4">
+                  <Input
+                    label="Refundable Deposit"
+                    value={depositAmount}
+                    onChange={(e) => setDepositAmount(digitsOnly(e.target.value))}
+                    leftAddon="₹"
+                  />
+                  <Select
+                    label="Deposit Status"
+                    value={depositStatus}
+                    onChange={(v) =>
+                      setDepositStatus(v as "NONE" | "HELD" | "REFUNDED")
+                    }
+                    options={[
+                      { value: "NONE", label: "No Deposit" },
+                      { value: "HELD", label: "Deposit Collected" },
+                      { value: "REFUNDED", label: "Deposit Returned" },
+                    ]}
+                  />
+                  <Select
+                    label="Payment Method"
+                    value={paymentMode}
+                    onChange={setPaymentMode}
+                    options={[
+                      { value: "CASH", label: "Cash" },
+                      { value: "UPI", label: "UPI / Online Transfer" },
+                    ]}
+                  />
+                  {paymentMode === "UPI" ? (
+                    <Input
+                      label="UPI Reference No."
+                      value={transactionId}
+                      onChange={(e) => setTransactionId(e.target.value)}
+                      placeholder="Transaction Ref ID"
+                    />
+                  ) : null}
+                </div>
 
-              <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#D9C398] bg-[#FBF6EB] px-4 py-3 text-sm">
-                <div>
-                  <span className="text-[#5E4F4A]">Charges Total: </span>
-                  <strong className="text-[#231917]">
-                    {formatRupees(computedAmounts.totalAmount)}
-                  </strong>
-                  <span className="mx-2 text-[#C5B397]">|</span>
-                  <span className="text-[#5E4F4A]">Refundable Deposit: </span>
-                  <strong className="text-[#925708]">
-                    {formatRupees(computedAmounts.depositAmount)}
-                  </strong>
+                <Input
+                  label="Charge Notes (Optional)"
+                  value={amountNotes}
+                  onChange={(e) => setAmountNotes(e.target.value)}
+                  placeholder="Any payment or deposit remarks..."
+                />
+
+                <div className="flex flex-wrap items-center justify-between gap-4 rounded-xl border border-[#D9C398] bg-[#FBF6EB] px-4 py-3 text-sm">
+                  <div>
+                    <span className="text-[#5E4F4A]">Charges Total: </span>
+                    <strong className="text-[#231917]">
+                      {formatRupees(computedAmounts.totalAmount)}
+                    </strong>
+                    <span className="mx-2 text-[#C5B397]">|</span>
+                    <span className="text-[#5E4F4A]">Refundable Deposit: </span>
+                    <strong className="text-[#925708]">
+                      {formatRupees(computedAmounts.depositAmount)}
+                    </strong>
+                  </div>
+                  <div className="text-base font-bold text-[#6A1B1B]">
+                    Total Collectible:{" "}
+                    {formatRupees(
+                      computedAmounts.totalAmount + computedAmounts.depositAmount
+                    )}
+                  </div>
                 </div>
-                <div className="text-base font-bold text-[#6A1B1B]">
-                  Total Collectible:{" "}
-                  {formatRupees(
-                    computedAmounts.totalAmount + computedAmounts.depositAmount
-                  )}
-                </div>
-              </div>
-            </>
-          )}
-        </CardBody>
-      </Card>
+              </>
+            )}
+          </CardBody>
+        </Card>
+      ) : null}
 
       <div className="flex flex-wrap items-center justify-end gap-3 pt-2">
         <Button

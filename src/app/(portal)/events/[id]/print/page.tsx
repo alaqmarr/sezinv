@@ -18,7 +18,11 @@ async function EventPrintContent({
   const user = await requireServerPageAccess("/events/[id]/print");
   const { id } = await paramsPromise;
   const decodedId = decodeURIComponent(id);
-  const unlock = await getEventAmountUnlockStatus(user.id, decodedId);
+  const unlock = await getEventAmountUnlockStatus(
+    user.id,
+    decodedId,
+    user.canViewCharges
+  );
 
   const [event, guidelines] = await Promise.all([
     getEventById(decodedId, unlock.unlocked),
@@ -35,7 +39,9 @@ async function EventPrintContent({
       printUnlockExpiresAt={
         unlock.source === "NEW_BOOKING_PRINT" ? unlock.expiresAt : null
       }
-      canEditCharges={canPerformAction("event:costs:edit", user.role)}
+      canEditCharges={
+        user.canViewCharges && canPerformAction("event:costs:edit", user.role)
+      }
     />
   );
 }

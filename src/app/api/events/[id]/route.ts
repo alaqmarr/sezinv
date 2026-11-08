@@ -19,7 +19,11 @@ export async function GET(
   if (!auth.ok) return auth.response;
 
   const { id } = await context.params;
-  const unlock = await getEventAmountUnlockStatus(auth.user.id, id);
+  const unlock = await getEventAmountUnlockStatus(
+    auth.user.id,
+    id,
+    auth.user.canViewCharges
+  );
   const event = await getEventById(id, unlock.unlocked);
 
   if (!event) {
@@ -79,8 +83,64 @@ export async function PATCH(
         userName: auth.user.name || auth.user.username,
         eventId: id,
       });
-      const unlock = await getEventAmountUnlockStatus(auth.user.id, id);
+      const unlock = await getEventAmountUnlockStatus(
+        auth.user.id,
+        id,
+        auth.user.canViewCharges
+      );
       const refreshed = await getEventById(id, unlock.unlocked);
+      return NextResponse.json({ ok: true, event: refreshed });
+    }
+
+    if (
+      body &&
+      typeof body.paymentMode === "string" &&
+      body.name === undefined
+    ) {
+      if (!auth.user.canViewCharges) {
+        return NextResponse.json(
+          {
+            error:
+              "You do not have access to Event Charges. Please ask an Administrator to enable the Event Charges module on your account.",
+          },
+          { status: 403 }
+        );
+      }
+      const unlock = await getEventAmountUnlockStatus(
+        auth.user.id,
+        id,
+        auth.user.canViewCharges
+      );
+      if (!unlock.unlocked) {
+        return NextResponse.json(
+          {
+            error:
+              "Please verify your Email Code first before updating payment details.",
+          },
+          { status: 403 }
+        );
+      }
+      await withWriteTransaction((tx) =>
+        tx.event.update({
+          where: { id },
+          data: {
+            paymentMode: body.paymentMode.trim() || null,
+            transactionId:
+              typeof body.transactionId === "string" &&
+              body.transactionId.trim()
+                ? body.transactionId.trim()
+                : null,
+          },
+        })
+      );
+      await recordActivity({
+        action: "AMOUNT_UPDATED",
+        summary: `Updated payment mode (${body.paymentMode}) for ${existing.description}`,
+        userId: auth.user.id,
+        userName: auth.user.name || auth.user.username,
+        eventId: id,
+      });
+      const refreshed = await getEventById(id, true);
       return NextResponse.json({ ok: true, event: refreshed });
     }
 
@@ -96,7 +156,11 @@ export async function PATCH(
       );
     }
 
-    const unlock = await getEventAmountUnlockStatus(auth.user.id, id);
+    const unlock = await getEventAmountUnlockStatus(
+      auth.user.id,
+      id,
+      auth.user.canViewCharges
+    );
     const updated = await updateEventBooking(
       id,
       parsed.data,

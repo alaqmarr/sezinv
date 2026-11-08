@@ -24,6 +24,7 @@ import {
 } from "@sezsec/shared";
 import type { PortalEvent } from "@sezsec/events";
 import { AmountAccessBar } from "@sezsec/finance";
+import { usePermissions } from "@sezsec/rbac";
 import {
   Badge,
   Button,
@@ -48,6 +49,7 @@ export function EventsListClient({
   canCreate: boolean;
   canManageVessels: boolean;
 }) {
+  const { canViewCharges } = usePermissions();
   const [tab, setTab] = useState("all");
   const [search, setSearch] = useState("");
   const [hallFilter, setHallFilter] = useState("ALL");
@@ -306,7 +308,9 @@ export function EventsListClient({
                   <th className="px-4 py-3.5">Occasion &amp; Booker</th>
                   <th className="px-4 py-3.5">Hall &amp; Thaals</th>
                   <th className="px-4 py-3.5">Caterer / Decorator</th>
-                  <th className="px-4 py-3.5">Charges</th>
+                  {canViewCharges ? (
+                    <th className="px-4 py-3.5">Charges</th>
+                  ) : null}
                   <th className="px-4 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
@@ -403,24 +407,26 @@ export function EventsListClient({
                         ) : null}
                       </td>
 
-                      <td className="px-4 py-3.5 whitespace-nowrap">
-                        {ev.amountsLocked ? (
-                          <span className="inline-flex items-center gap-1 rounded-lg bg-[#F3EFE6] px-2.5 py-1 text-xs text-[#7B6B63]">
-                            <Lock className="h-3 w-3" /> Hidden
-                          </span>
-                        ) : (
-                          <div>
-                            <div className="font-bold text-[#231917]">
-                              {formatRupees(ev.totalAmount || 0)}
-                            </div>
-                            {(ev.depositAmount || 0) > 0 ? (
-                              <div className="text-[11px] text-[#925708]">
-                                + {formatRupees(ev.depositAmount)} Deposit
+                      {canViewCharges ? (
+                        <td className="px-4 py-3.5 whitespace-nowrap">
+                          {ev.amountsLocked ? (
+                            <span className="inline-flex items-center gap-1 rounded-lg bg-[#F3EFE6] px-2.5 py-1 text-xs text-[#7B6B63]">
+                              <Lock className="h-3 w-3" /> Hidden
+                            </span>
+                          ) : (
+                            <div>
+                              <div className="font-bold text-[#231917]">
+                                {formatRupees(ev.totalAmount || 0)}
                               </div>
-                            ) : null}
-                          </div>
-                        )}
-                      </td>
+                              {(ev.depositAmount || 0) > 0 ? (
+                                <div className="text-[11px] text-[#925708]">
+                                  + {formatRupees(ev.depositAmount)} Deposit
+                                </div>
+                              ) : null}
+                            </div>
+                          )}
+                        </td>
+                      ) : null}
 
                       <td className="px-4 py-3.5 text-right whitespace-nowrap">
                         <div className="inline-flex items-center gap-1.5">

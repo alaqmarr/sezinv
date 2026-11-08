@@ -1,8 +1,25 @@
 import type { AppRole } from "@sezsec/shared";
-import { ACTION_ACCESS_RULES, PAGE_ACCESS_RULES } from "./rbac.constants";
+import {
+  ACTION_ACCESS_RULES,
+  EVENT_CHARGES_MODULE_ID,
+  PAGE_ACCESS_RULES,
+} from "./rbac.constants";
 
 export function isAdminRole(role: AppRole | string | undefined | null): boolean {
   return role === "ADMIN";
+}
+
+export function hasEventChargesModule(
+  role: AppRole | string | undefined | null,
+  moduleIds?: readonly string[] | null
+): boolean {
+  if (!role) return false;
+  if (role === "ADMIN") return true;
+  if (!moduleIds || moduleIds.length === 0) return false;
+  return (
+    moduleIds.includes(EVENT_CHARGES_MODULE_ID) ||
+    moduleIds.includes("event-charges")
+  );
 }
 
 export function isManagerOrAbove(role: AppRole | string | undefined | null): boolean {

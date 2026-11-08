@@ -50,7 +50,7 @@ const DATASET_OPTIONS: Array<{
 ];
 
 export function ExportSheetsClient() {
-  const { amountUnlocked } = usePermissions();
+  const { amountUnlocked, canViewCharges } = usePermissions();
   const [dataset, setDataset] = useState<ExportDataset>("all");
   const [fromDate, setFromDate] = useState("");
   const [toDate, setToDate] = useState("");
@@ -87,9 +87,11 @@ export function ExportSheetsClient() {
 
       notify.success(
         "Excel sheet downloaded",
-        amountUnlocked
+        amountUnlocked && canViewCharges
           ? "Booking charges and deposits were included in the sheet."
-          : "Downloaded without charge columns (amounts are hidden)."
+          : canViewCharges
+            ? "Downloaded without charge columns (amounts are hidden)."
+            : "Booking, stock, and movement sheets saved to your device."
       );
     } catch {
       notify.error("Download failed", "Please check your connection and try again.");
@@ -189,9 +191,11 @@ export function ExportSheetsClient() {
         </CardBody>
         <CardFooter>
           <p className="text-xs text-[#6E5D55]">
-            {amountUnlocked
+            {amountUnlocked && canViewCharges
               ? "Rupee charges & refundable deposits will be included."
-              : "Rupee charges are currently hidden and will be omitted from the sheet."}
+              : canViewCharges
+                ? "Rupee charges are currently hidden and will be omitted from the sheet."
+                : "Booking sheets include dates, halls, thaals, caterers, and decorators."}
           </p>
           <Button
             variant="primary"

@@ -1,6 +1,8 @@
 import bcrypt from "bcryptjs";
-import { db, withWriteLock } from "@sezsec/db";
+import { db, withWriteLock, withWriteTransaction } from "@sezsec/db";
 import { recordActivity } from "@sezsec/logs";
+import { DEFAULT_PORTAL_MODULES } from "@sezsec/rbac/rbac.constants";
+import { hasEventChargesModule } from "@sezsec/rbac/rbac.helper";
 import type { AppRole } from "@sezsec/shared";
 import {
   getSessionFromCookies,
@@ -16,18 +18,26 @@ function toSessionUser(user: {
   mobile: string | null;
   role: string;
   profileStatus: string | null;
+  moduleAccess?: Array<{ moduleId: string }>;
+  moduleIds?: string[];
 }): SessionUser {
+  const role = user.role as AppRole;
+  const moduleIds = user.moduleIds
+    ? [...user.moduleIds]
+    : (user.moduleAccess ?? []).map((m) => m.moduleId);
   return {
     id: user.id,
     username: user.username,
     name: user.name,
     email: user.email,
     mobile: user.mobile,
-    role: user.role as AppRole,
+    role,
     profileStatus:
       user.profileStatus === "COMPLETED" || user.profileStatus === "SKIPPED"
         ? user.profileStatus
         : null,
+    moduleIds,
+    canViewCharges: hasEventChargesModule(role, moduleIds),
   };
 }
 
@@ -50,6 +60,9 @@ export async function getFreshSessionUser(): Promise<SessionUser | null> {
       mobile: true,
       role: true,
       profileStatus: true,
+      moduleAccess: {
+        select: { moduleId: true },
+      },
     },
   });
 
@@ -71,6 +84,11 @@ export async function loginWithPassword(
 
   const user = await db.user.findUnique({
     where: { username },
+    include: {
+      moduleAccess: {
+        select: { moduleId: true },
+      },
+    },
   });
 
   if (!user) {
@@ -134,8 +152,21 @@ export async function setupInitialAdministrator(input: {
   }
 
   const hashedPassword = await bcrypt.hash(input.password, 10);
-  const created = await withWriteLock(() =>
-    db.user.create({
+  const created = await withWriteTransaction(async (tx) => {
+    for (const mod of DEFAULT_PORTAL_MODULES) {
+      await tx.module.upsert({
+        where: { id: mod.id },
+        update: {},
+        create: {
+          id: mod.id,
+          name: mod.name,
+          description: mod.description,
+          icon: mod.icon,
+        },
+      });
+    }
+
+    const adminUser = await tx.user.create({
       data: {
         name: input.name.trim(),
         username: input.username.trim(),
@@ -145,8 +176,22 @@ export async function setupInitialAdministrator(input: {
         role: "ADMIN",
         profileStatus: "COMPLETED",
       },
-    })
-  );
+    });
+
+    for (const mod of DEFAULT_PORTAL_MODULES) {
+      await tx.userModuleAccess.create({
+        data: {
+          userId: adminUser.id,
+          moduleId: mod.id,
+        },
+      });
+    }
+
+    return {
+      ...adminUser,
+      moduleIds: DEFAULT_PORTAL_MODULES.map((m) => m.id),
+    };
+  });
 
   const sessionUser = toSessionUser(created);
   await setSessionCookie(sessionUser);

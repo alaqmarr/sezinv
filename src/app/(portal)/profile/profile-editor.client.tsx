@@ -165,7 +165,11 @@ export function ProfileEditorClient({
         <Card accentTop>
           <CardHeader
             title="Your Name & Contact Details"
-            subtitle="Your email address is used to send 6-digit codes when viewing booking charges or changing your password."
+            subtitle={
+              initialUser.canViewCharges
+                ? "Your email address is used to send 6-digit codes when viewing booking charges or changing your password."
+                : "Your email address is used to send 6-digit verification codes when changing or resetting your password."
+            }
             action={
               <Badge tone="maroon">
                 {ROLE_LABELS[initialUser.role] || initialUser.role}
@@ -194,7 +198,11 @@ export function ProfileEditorClient({
               onChange={(e) => setEmail(e.target.value)}
               placeholder="you@example.com"
               leftAddon={<Mail className="h-4 w-4" />}
-              hint="Required to unlock rupee charges via email verification"
+              hint={
+                initialUser.canViewCharges
+                  ? "Required to unlock rupee charges and verify password updates"
+                  : "Used to receive 6-digit codes for password updates"
+              }
             />
             <Input
               label="Mobile Number"

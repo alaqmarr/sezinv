@@ -6,9 +6,21 @@ import type { AppRole } from "@sezsec/shared";
 import { DEFAULT_PORTAL_MODULES } from "./rbac.constants";
 import { canAccessPage } from "./rbac.helper";
 
+let defaultModulesVerified = false;
+
 export async function ensureDefaultModulesSeeded(): Promise<void> {
-  const count = await db.module.count();
-  if (count > 0) return;
+  if (defaultModulesVerified) return;
+
+  const requiredIds = DEFAULT_PORTAL_MODULES.map((m) => m.id);
+  const existing = await db.module.findMany({
+    where: { id: { in: requiredIds } },
+    select: { id: true },
+  });
+
+  if (existing.length === requiredIds.length) {
+    defaultModulesVerified = true;
+    return;
+  }
 
   await withWriteLock(async () => {
     for (const mod of DEFAULT_PORTAL_MODULES) {
@@ -24,6 +36,7 @@ export async function ensureDefaultModulesSeeded(): Promise<void> {
       });
     }
   });
+  defaultModulesVerified = true;
 }
 
 export async function requireServerSession(): Promise<SessionUser> {

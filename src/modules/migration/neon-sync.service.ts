@@ -13,6 +13,7 @@ import {
 import { db, sqliteAdapterFactory, withWriteLock } from "@sezsec/db";
 import { normalizeHallList } from "@sezsec/shared";
 import { recordActivity } from "@sezsec/logs";
+import { DEFAULT_PORTAL_MODULES } from "@sezsec/rbac/rbac.constants";
 import type {
   MigrationPreviewReport,
   MigrationRunResult,
@@ -401,6 +402,24 @@ export async function runOneClickNeonToSqliteMigration(params: {
             },
           });
           moduleIdMap.set(m.id, created.id);
+        }
+      }
+      for (const defMod of DEFAULT_PORTAL_MODULES) {
+        const existingById = await tx.module.findUnique({
+          where: { id: defMod.id },
+        });
+        const existingByName = await tx.module.findUnique({
+          where: { name: defMod.name },
+        });
+        if (!existingById && !existingByName) {
+          await tx.module.create({
+            data: {
+              id: defMod.id,
+              name: defMod.name,
+              description: defMod.description,
+              icon: defMod.icon,
+            },
+          });
         }
       }
       importedByTable.modules = snapshot.modules.length;
@@ -1428,6 +1447,24 @@ export async function syncAccountsOrInitialDataFromNeon(): Promise<{
             },
           });
           moduleIdMap.set(m.id, created.id);
+        }
+      }
+      for (const defMod of DEFAULT_PORTAL_MODULES) {
+        const existingById = await tx.module.findUnique({
+          where: { id: defMod.id },
+        });
+        const existingByName = await tx.module.findUnique({
+          where: { name: defMod.name },
+        });
+        if (!existingById && !existingByName) {
+          await tx.module.create({
+            data: {
+              id: defMod.id,
+              name: defMod.name,
+              description: defMod.description,
+              icon: defMod.icon,
+            },
+          });
         }
       }
       totalImported += snapshot.modules.length;

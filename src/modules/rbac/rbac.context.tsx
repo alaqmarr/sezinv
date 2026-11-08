@@ -48,9 +48,24 @@ export function usePermissions() {
     isAdmin: isAdminRole(user.role),
     isManagerOrAbove: isManagerOrAbove(user.role),
     isStaffOrAbove: isStaffOrAbove(user.role),
-    amountUnlocked,
-    amountUnlockExpiresAt,
-    can: (actionKey: string) => canPerformAction(actionKey, user.role),
+    canViewCharges: user.canViewCharges,
+    canEditCharges:
+      user.canViewCharges && canPerformAction("event:costs:edit", user.role),
+    amountUnlocked: user.canViewCharges && amountUnlocked,
+    amountUnlockExpiresAt: user.canViewCharges ? amountUnlockExpiresAt : null,
+    hasModule: (moduleId: string) =>
+      user.role === "ADMIN" || user.moduleIds.includes(moduleId),
+    can: (actionKey: string) => {
+      if (actionKey === "event:costs:view") {
+        return user.canViewCharges;
+      }
+      if (actionKey === "event:costs:edit") {
+        return (
+          user.canViewCharges && canPerformAction("event:costs:edit", user.role)
+        );
+      }
+      return canPerformAction(actionKey, user.role);
+    },
   };
 }
 

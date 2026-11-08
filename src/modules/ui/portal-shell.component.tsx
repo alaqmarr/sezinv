@@ -269,12 +269,14 @@ export function PortalShell({
               >
                 {todayMisri.formattedAr}
               </span>
-              <AmountAccessBar unlocked={amountUnlocked} compact />
+              {user.canViewCharges ? (
+                <AmountAccessBar unlocked={amountUnlocked} compact />
+              ) : null}
             </div>
           </div>
         </header>
 
-        {!user.email ? (
+        {user.canViewCharges && !user.email ? (
           <div className="no-print border-b border-[#EED294] bg-[#FEF7E6] px-4 py-2 text-center text-xs text-[#925708]">
             Please add your email address in{" "}
             <Link href="/profile" className="font-bold underline">

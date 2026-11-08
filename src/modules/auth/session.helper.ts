@@ -37,9 +37,29 @@ export async function verifySessionToken(
   if (!token) return null;
   try {
     const { payload } = await jwtVerify(token, getSessionKey());
-    const user = payload.user as SessionUser | undefined;
+    const user = payload.user as Partial<SessionUser> | undefined;
     if (!user || !user.id || !user.role) return null;
-    return user;
+    const moduleIds = Array.isArray(user.moduleIds)
+      ? user.moduleIds.map(String)
+      : [];
+    return {
+      id: user.id,
+      username: user.username || "",
+      name: user.name ?? null,
+      email: user.email ?? null,
+      mobile: user.mobile ?? null,
+      role: user.role,
+      profileStatus:
+        user.profileStatus === "COMPLETED" || user.profileStatus === "SKIPPED"
+          ? user.profileStatus
+          : null,
+      moduleIds,
+      canViewCharges:
+        user.role === "ADMIN" ||
+        Boolean(user.canViewCharges) ||
+        moduleIds.includes("event_charges") ||
+        moduleIds.includes("event-charges"),
+    };
   } catch {
     return null;
   }
@@ -96,9 +116,10 @@ export async function clearAmountUnlockCookie(): Promise<void> {
 }
 
 export async function getAmountUnlockStatus(
-  userId: string | null | undefined
+  userId: string | null | undefined,
+  canViewCharges = true
 ): Promise<AmountUnlockStatus> {
-  if (!userId) return { unlocked: false, expiresAt: null };
+  if (!userId || !canViewCharges) return { unlocked: false, expiresAt: null };
   const store = await cookies();
   const token = store.get(AMOUNT_UNLOCK_COOKIE_NAME)?.value;
   if (!token) return { unlocked: false, expiresAt: null };

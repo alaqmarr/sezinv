@@ -10,7 +10,7 @@ import { EventsListClient } from "./events-list.client";
 async function EventsPageContent() {
   await connection();
   const user = await requireServerPageAccess("/events");
-  const unlock = await getAmountUnlockStatus(user.id);
+  const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
   const events = await listEvents({ amountsUnlocked: unlock.unlocked });
 
   return (

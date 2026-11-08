@@ -6,6 +6,16 @@ export async function POST() {
   const auth = await requireApiAuth();
   if (!auth.ok) return auth.response;
 
+  if (!auth.user.canViewCharges) {
+    return NextResponse.json(
+      {
+        error:
+          "You do not have access to Event Charges. Only accounts with the Event Charges module enabled can request verification codes.",
+      },
+      { status: 403 }
+    );
+  }
+
   if (!auth.user.email) {
     return NextResponse.json(
       {

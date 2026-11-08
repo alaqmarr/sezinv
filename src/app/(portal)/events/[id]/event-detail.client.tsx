@@ -34,6 +34,7 @@ import {
   AmountAccessBar,
   EventChargesDrawer,
 } from "@sezsec/finance";
+import { usePermissions } from "@sezsec/rbac";
 import {
   Badge,
   Button,
@@ -70,6 +71,7 @@ export function EventDetailClient({
   canManageVessels: boolean;
 }) {
   const router = useRouter();
+  const { canViewCharges } = usePermissions();
   const [chargesDrawerOpen, setChargesDrawerOpen] = useState(false);
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
   const [forceDeletePrompt, setForceDeletePrompt] = useState<string | null>(null);
@@ -560,11 +562,12 @@ export function EventDetailClient({
                 <div className="rounded-xl border border-dashed border-[#D9C398] bg-[#FAF7F2] p-5 text-center">
                   <Lock className="mx-auto h-6 w-6 text-[#6A1B1B]" />
                   <p className="mt-2 text-sm font-semibold text-[#231917]">
-                    Amounts Hidden
+                    {canViewCharges ? "Amounts Hidden" : "Charges Restricted"}
                   </p>
                   <p className="mt-1 text-xs text-[#6E5D55]">
-                    Use the &ldquo;Show Charges (Email Code)&rdquo; button above to
-                    verify your email and view or edit booking amounts.
+                    {canViewCharges
+                      ? "Use the \u201CShow Charges (Email Code)\u201D button above to verify your email and view or edit booking amounts."
+                      : "Only authorised accounts with the Event Charges module enabled can view or unlock booking amounts."}
                   </p>
                 </div>
               ) : (

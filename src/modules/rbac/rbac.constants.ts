@@ -41,7 +41,7 @@ export const ACTION_ACCESS_RULES: Record<string, AppRole[]> = {
   "event:cancel": ["ADMIN", "ADMIN_CUSTOM", "MANAGER"],
   "event:delete": ["ADMIN"],
   "event:print": ["ADMIN", "ADMIN_CUSTOM", "MANAGER", "STAFF", "WATCHER"],
-  "event:costs:view": ["ADMIN", "ADMIN_CUSTOM", "MANAGER", "STAFF", "WATCHER"],
+  "event:costs:view": ["ADMIN"],
   "event:costs:edit": ["ADMIN", "ADMIN_CUSTOM", "MANAGER"],
 
   "inventory:issue-return": ["ADMIN", "ADMIN_CUSTOM", "MANAGER", "STAFF"],
@@ -60,12 +60,28 @@ export const ACTION_ACCESS_RULES: Record<string, AppRole[]> = {
   "settings:reset": ["ADMIN"],
 };
 
+export const EVENT_CHARGES_MODULE_ID = "event_charges" as const;
+
+export const DEFAULT_STAFF_MODULE_IDS = [
+  "events-module",
+  "inventory-module",
+  "ledger-module",
+  "settings-module",
+] as const;
+
 export const DEFAULT_PORTAL_MODULES = [
   {
     id: "events-module",
     name: "Hall Bookings & Events",
     description: "Book halls, manage arrangements, and print booking forms",
     icon: "CalendarDays",
+  },
+  {
+    id: EVENT_CHARGES_MODULE_ID,
+    name: "Event Charges",
+    description:
+      "Unlock with 6-digit email code to view, edit, and print booking rupee charges & deposits",
+    icon: "IndianRupee",
   },
   {
     id: "inventory-module",

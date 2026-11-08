@@ -2,9 +2,23 @@
 
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
-import { Edit3, Mail, Plus, Trash2, UserPlus, Users } from "lucide-react";
+import {
+  Edit3,
+  IndianRupee,
+  Lock,
+  Mail,
+  Plus,
+  Trash2,
+  UserPlus,
+  Users,
+} from "lucide-react";
 import { ROLE_LABELS, type AppRole } from "@sezsec/shared";
-import { DEFAULT_PORTAL_MODULES } from "@sezsec/rbac/rbac.constants";
+import {
+  DEFAULT_PORTAL_MODULES,
+  DEFAULT_STAFF_MODULE_IDS,
+  EVENT_CHARGES_MODULE_ID,
+} from "@sezsec/rbac/rbac.constants";
+import { hasEventChargesModule } from "@sezsec/rbac/rbac.helper";
 import type { TeamMemberRecord } from "@sezsec/users";
 import {
   Badge,
@@ -16,16 +30,24 @@ import {
   Modal,
   MultiSelectPills,
   Select,
+  Switch,
   notify,
 } from "@sezsec/ui";
 
 const ROLE_OPTIONS = [
   { value: "ADMIN", label: "Administrator (Full Office & Migration Control)" },
-  { value: "MANAGER", label: "Office Manager (Bookings, Charges & Settings)" },
+  { value: "MANAGER", label: "Office Manager (Bookings, Vessels & Settings)" },
   { value: "STAFF", label: "Store & Hall Staff (Issue/Return Vessels & View)" },
   { value: "WATCHER", label: "View-Only Member (Read Bookings & Print)" },
   { value: "ADMIN_CUSTOM", label: "Committee Lead (Bookings & Settings)" },
 ];
+
+const SECTION_MODULES = DEFAULT_PORTAL_MODULES.filter(
+  (m) => m.id !== EVENT_CHARGES_MODULE_ID
+);
+const PORTAL_MODULE_ID_SET = new Set<string>(
+  DEFAULT_PORTAL_MODULES.map((m) => m.id)
+);
 
 export function TeamManagementPanel({
   initialMembers,
@@ -49,9 +71,11 @@ export function TeamManagementPanel({
   const [its, setIts] = useState("");
   const [role, setRole] = useState<AppRole>("STAFF");
   const [password, setPassword] = useState("");
-  const [moduleIds, setModuleIds] = useState<string[]>(
-    DEFAULT_PORTAL_MODULES.map((m) => m.id)
-  );
+  const [sectionModuleIds, setSectionModuleIds] = useState<string[]>([
+    ...DEFAULT_STAFF_MODULE_IDS,
+  ]);
+  const [chargesEnabled, setChargesEnabled] = useState(false);
+  const [extraModuleIds, setExtraModuleIds] = useState<string[]>([]);
 
   const openCreateModal = () => {
     setEditing(null);
@@ -62,7 +86,9 @@ export function TeamManagementPanel({
     setIts("");
     setRole("STAFF");
     setPassword("");
-    setModuleIds(DEFAULT_PORTAL_MODULES.map((m) => m.id));
+    setSectionModuleIds([...DEFAULT_STAFF_MODULE_IDS]);
+    setChargesEnabled(false);
+    setExtraModuleIds([]);
     setModalOpen(true);
   };
 
@@ -75,10 +101,20 @@ export function TeamManagementPanel({
     setIts(m.its || "");
     setRole(m.role);
     setPassword("");
-    setModuleIds(
-      m.moduleIds.length > 0
-        ? m.moduleIds
-        : DEFAULT_PORTAL_MODULES.map((mod) => mod.id)
+
+    const existingSections = m.moduleIds.filter(
+      (id) => PORTAL_MODULE_ID_SET.has(id) && id !== EVENT_CHARGES_MODULE_ID
+    );
+    setSectionModuleIds(
+      existingSections.length > 0
+        ? existingSections
+        : [...DEFAULT_STAFF_MODULE_IDS]
+    );
+    setChargesEnabled(hasEventChargesModule(m.role, m.moduleIds));
+    setExtraModuleIds(
+      m.moduleIds.filter(
+        (id) => !PORTAL_MODULE_ID_SET.has(id) && id !== "event-charges"
+      )
     );
     setModalOpen(true);
   };
@@ -91,6 +127,15 @@ export function TeamManagementPanel({
       );
       return;
     }
+
+    const allowCharges = role === "ADMIN" || chargesEnabled;
+    const moduleIds = Array.from(
+      new Set([
+        ...sectionModuleIds,
+        ...(allowCharges ? [EVENT_CHARGES_MODULE_ID] : []),
+        ...extraModuleIds,
+      ])
+    );
 
     setSaving(true);
     try {
@@ -190,7 +235,7 @@ export function TeamManagementPanel({
             Office Staff &amp; Committee Accounts ({members.length})
           </h3>
           <p className="text-xs text-[#7B6B63]">
-            Add email addresses for staff members who need 6-digit codes to view rupee charges.
+            Only accounts with the <strong>Event Charges</strong> module enabled (or Administrators) can unlock rupee charges via 6-digit email code.
           </p>
         </div>
         <Button
@@ -216,13 +261,19 @@ export function TeamManagementPanel({
                 <tr className="border-b border-[#EAE2D6] bg-[#FAF7F2] text-xs font-semibold uppercase tracking-wider text-[#7B6B63]">
                   <th className="px-5 py-3.5">Name &amp; Sign-In ID</th>
                   <th className="px-5 py-3.5">Access Level</th>
+                  <th className="px-5 py-3.5">Charges Access</th>
                   <th className="px-5 py-3.5">Email (For 6-Digit Codes)</th>
                   <th className="px-5 py-3.5">Mobile</th>
                   <th className="px-5 py-3.5 text-right">Actions</th>
                 </tr>
               </thead>
               <tbody className="divide-y divide-[#F0E9DD]">
-                {members.map((m) => (
+                {members.map((m) => {
+                  const memberHasCharges = hasEventChargesModule(
+                    m.role,
+                    m.moduleIds
+                  );
+                  return (
                   <tr key={m.id} className="hover:bg-[#FAF7F2]/60">
                     <td className="px-5 py-3.5">
                       <div className="font-semibold text-[#231917]">
@@ -251,14 +302,36 @@ export function TeamManagementPanel({
                         {ROLE_LABELS[m.role] || m.role}
                       </Badge>
                     </td>
+                    <td className="whitespace-nowrap px-5 py-3.5">
+                      {m.role === "ADMIN" ? (
+                        <Badge tone="maroon">
+                          <IndianRupee className="mr-1 h-3 w-3" />
+                          Allowed (Admin)
+                        </Badge>
+                      ) : memberHasCharges ? (
+                        <Badge tone="sage">
+                          <IndianRupee className="mr-1 h-3 w-3" />
+                          Event Charges
+                        </Badge>
+                      ) : (
+                        <span className="inline-flex items-center gap-1 text-xs text-[#8C7B73]">
+                          <Lock className="h-3 w-3" />
+                          Restricted
+                        </span>
+                      )}
+                    </td>
                     <td className="px-5 py-3.5 text-xs">
                       {m.email ? (
                         <span className="inline-flex items-center gap-1.5 text-[#23583A]">
                           <Mail className="h-3.5 w-3.5" />
                           {m.email}
                         </span>
+                      ) : memberHasCharges ? (
+                        <span className="font-medium text-[#925708]">
+                          Needed for 6-digit codes
+                        </span>
                       ) : (
-                        <span className="text-[#925708]">Not added yet</span>
+                        <span className="text-[#8C7B73]">Not added</span>
                       )}
                     </td>
                     <td className="whitespace-nowrap px-5 py-3.5 text-xs text-[#5E4F4A]">
@@ -287,7 +360,8 @@ export function TeamManagementPanel({
                       </div>
                     </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>
@@ -347,7 +421,13 @@ export function TeamManagementPanel({
           <Select
             label="Role & Permission Level"
             value={role}
-            onChange={(v) => setRole(v as AppRole)}
+            onChange={(v) => {
+              const nextRole = v as AppRole;
+              setRole(nextRole);
+              if (nextRole === "ADMIN") {
+                setChargesEnabled(true);
+              }
+            }}
             options={ROLE_OPTIONS}
           />
           <Input
@@ -369,12 +449,25 @@ export function TeamManagementPanel({
           <div className="sm:col-span-2">
             <MultiSelectPills
               label="Portal Sections Enabled"
-              options={DEFAULT_PORTAL_MODULES.map((m) => ({
+              options={SECTION_MODULES.map((m) => ({
                 value: m.id,
                 label: m.name,
               }))}
-              values={moduleIds}
-              onChange={setModuleIds}
+              values={sectionModuleIds}
+              onChange={setSectionModuleIds}
+            />
+          </div>
+          <div className="sm:col-span-2 rounded-2xl border border-[#D9C398] bg-[#FBF6EB]/75 p-4">
+            <Switch
+              checked={role === "ADMIN" || chargesEnabled}
+              disabled={role === "ADMIN"}
+              onChange={setChargesEnabled}
+              label="Event Charges Access (Unlock Amounts via 6-Digit Email Code)"
+              description={
+                role === "ADMIN"
+                  ? "Included automatically for Administrators."
+                  : "When enabled, this member receives the Event Charges module and can unlock, view, and print booking rupee charges using a 6-digit email code."
+              }
             />
           </div>
         </div>

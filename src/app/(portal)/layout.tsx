@@ -20,7 +20,7 @@ async function AuthenticatedPortalWrapper({
   await connection();
   const user = await requireServerSession();
   const [unlockStatus] = await Promise.all([
-    getAmountUnlockStatus(user.id),
+    getAmountUnlockStatus(user.id, user.canViewCharges),
     ensureDefaultModulesSeeded(),
     ensureStarterVenuesIfEmpty(),
   ]);

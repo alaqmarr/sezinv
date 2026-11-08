@@ -10,7 +10,7 @@ import { PageHeader, Skeleton } from "@sezsec/ui";
 async function CalendarContent() {
   await connection();
   const user = await requireServerPageAccess("/events/calendar");
-  const unlock = await getAmountUnlockStatus(user.id);
+  const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
   const events = await listEvents({ amountsUnlocked: unlock.unlocked });
 
   return (

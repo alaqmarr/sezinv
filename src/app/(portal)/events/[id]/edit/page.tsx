@@ -19,7 +19,7 @@ async function EditEventContent({
   const user = await requireServerPageAccess("/events/[id]/edit");
   const { id } = await paramsPromise;
   const decodedId = decodeURIComponent(id);
-  const unlock = await getAmountUnlockStatus(user.id);
+  const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
 
   const [event, master] = await Promise.all([
     getEventById(decodedId, unlock.unlocked),

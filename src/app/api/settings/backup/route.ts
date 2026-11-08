@@ -22,7 +22,10 @@ export async function GET(request: NextRequest) {
   const from = sp.get("from");
   const to = sp.get("to");
 
-  const unlock = await getAmountUnlockStatus(auth.user.id);
+  const unlock = await getAmountUnlockStatus(
+    auth.user.id,
+    auth.user.canViewCharges
+  );
 
   if (format === "json") {
     if (auth.user.role !== "ADMIN") {

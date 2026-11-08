@@ -145,28 +145,7 @@ echo "      Applying database schema (non-destructive)..."
 npx prisma db push
 
 echo "      Enforcing SQLite WAL mode, relational constraints & health check..."
-npx tsx -e '
-import "dotenv/config";
-import { db, getDatabaseHealth } from "./src/modules/db/db.module";
-(async () => {
-  const health = await getDatabaseHealth();
-  if (health.status !== "healthy") {
-    throw new Error("Database health verification failed: " + (health.error || "unhealthy"));
-  }
-  const tables = await db.$queryRawUnsafe<Array<{ count: bigint | number }>>(
-    "SELECT COUNT(*) AS count FROM sqlite_master WHERE type = \x27table\x27 AND name NOT LIKE \x27sqlite_%\x27"
-  );
-  const tableCount = Number(tables[0]?.count ?? 0);
-  console.log(
-    `      Database sanctioned: path=${health.filePath} | journal_mode=${health.pragmas.journalMode} | foreign_keys=${health.pragmas.foreignKeys} | tables=${tableCount} | status=${health.status}`
-  );
-  await db.$disconnect();
-  process.exit(0);
-})().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
-'
+npx tsx prisma/sanction-db.ts
 
 if [ "$DB_FILE_PATH" != ":memory:" ]; then
   for f in "$DB_FILE_PATH" "${DB_FILE_PATH}-wal" "${DB_FILE_PATH}-shm"; do

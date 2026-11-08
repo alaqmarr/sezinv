@@ -77,9 +77,18 @@ export async function getBookingPrintUnlockStatus(
 
 export async function getEventAmountUnlockStatus(
   userId: string | null | undefined,
-  eventId: string
+  eventId: string,
+  canViewCharges = true
 ): Promise<EventAmountUnlockStatus> {
-  const globalUnlock = await getAmountUnlockStatus(userId);
+  if (!userId || !canViewCharges) {
+    return {
+      unlocked: false,
+      expiresAt: null,
+      source: null,
+    };
+  }
+
+  const globalUnlock = await getAmountUnlockStatus(userId, canViewCharges);
   if (globalUnlock.unlocked) {
     return {
       unlocked: true,

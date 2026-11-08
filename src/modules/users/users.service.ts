@@ -6,7 +6,11 @@ import {
   buildWelcomeUserHtml,
   sendPortalEmail,
 } from "@sezsec/notifications";
-import { DEFAULT_PORTAL_MODULES } from "@sezsec/rbac/rbac.constants";
+import {
+  DEFAULT_PORTAL_MODULES,
+  DEFAULT_STAFF_MODULE_IDS,
+  EVENT_CHARGES_MODULE_ID,
+} from "@sezsec/rbac/rbac.constants";
 
 export interface TeamMemberRecord {
   id: string;
@@ -59,8 +63,18 @@ export async function createTeamMember(
   actor: { id: string; name: string }
 ): Promise<TeamMemberRecord> {
   const hashedPassword = await bcrypt.hash(input.password, 10);
-  const defaultMods =
-    input.moduleIds ?? DEFAULT_PORTAL_MODULES.map((m) => m.id);
+  const rawMods =
+    input.moduleIds ??
+    (input.role === "ADMIN"
+      ? DEFAULT_PORTAL_MODULES.map((m) => m.id)
+      : [...DEFAULT_STAFF_MODULE_IDS]);
+  const requestedMods = Array.from(
+    new Set(
+      input.role === "ADMIN"
+        ? [...rawMods, EVENT_CHARGES_MODULE_ID]
+        : rawMods
+    )
+  );
 
   const created = await withWriteTransaction(async (tx) => {
     for (const mod of DEFAULT_PORTAL_MODULES) {
@@ -76,6 +90,14 @@ export async function createTeamMember(
       });
     }
 
+    const validModules =
+      requestedMods.length > 0
+        ? await tx.module.findMany({
+            where: { id: { in: requestedMods } },
+            select: { id: true },
+          })
+        : [];
+
     const user = await tx.user.create({
       data: {
         username: input.username.trim(),
@@ -90,11 +112,11 @@ export async function createTeamMember(
       },
     });
 
-    for (const modId of defaultMods) {
+    for (const mod of validModules) {
       await tx.userModuleAccess.create({
         data: {
           userId: user.id,
-          moduleId: modId,
+          moduleId: mod.id,
         },
       });
     }
@@ -173,10 +195,39 @@ export async function updateTeamMember(
     });
 
     if (input.moduleIds) {
+      for (const mod of DEFAULT_PORTAL_MODULES) {
+        await tx.module.upsert({
+          where: { id: mod.id },
+          update: {},
+          create: {
+            id: mod.id,
+            name: mod.name,
+            description: mod.description,
+            icon: mod.icon,
+          },
+        });
+      }
+
+      const targetRole = input.role ?? (user.role as AppRole);
+      const uniqueIds = Array.from(
+        new Set(
+          targetRole === "ADMIN"
+            ? [...input.moduleIds, EVENT_CHARGES_MODULE_ID]
+            : input.moduleIds
+        )
+      );
+      const validModules =
+        uniqueIds.length > 0
+          ? await tx.module.findMany({
+              where: { id: { in: uniqueIds } },
+              select: { id: true },
+            })
+          : [];
+
       await tx.userModuleAccess.deleteMany({ where: { userId } });
-      for (const modId of input.moduleIds) {
+      for (const mod of validModules) {
         await tx.userModuleAccess.create({
-          data: { userId, moduleId: modId },
+          data: { userId, moduleId: mod.id },
         });
       }
     }

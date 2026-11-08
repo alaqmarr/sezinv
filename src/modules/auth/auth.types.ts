@@ -8,6 +8,8 @@ export interface SessionUser {
   mobile: string | null;
   role: AppRole;
   profileStatus: "COMPLETED" | "SKIPPED" | null;
+  moduleIds: string[];
+  canViewCharges: boolean;
 }
 
 export type OtpPurpose =

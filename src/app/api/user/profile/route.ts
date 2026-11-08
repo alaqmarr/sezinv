@@ -48,6 +48,8 @@ export async function PATCH(request: Request) {
         updated.profileStatus === "SKIPPED"
           ? updated.profileStatus
           : null,
+      moduleIds: auth.user.moduleIds,
+      canViewCharges: auth.user.canViewCharges,
     });
 
     return NextResponse.json({ ok: true });

@@ -16,7 +16,7 @@ async function NewEventFormContent({
   await connection();
   const user = await requireServerPageAccess("/events/new");
   const [unlock, master, sp] = await Promise.all([
-    getAmountUnlockStatus(user.id),
+    getAmountUnlockStatus(user.id, user.canViewCharges),
     getPortalMasterSettings(),
     searchParamsPromise,
   ]);

@@ -7,6 +7,16 @@ export async function POST(request: Request) {
   const auth = await requireApiAuth();
   if (!auth.ok) return auth.response;
 
+  if (!auth.user.canViewCharges) {
+    return NextResponse.json(
+      {
+        error:
+          "You do not have access to Event Charges. Only accounts with the Event Charges module enabled can unlock booking amounts.",
+      },
+      { status: 403 }
+    );
+  }
+
   if (!auth.user.email) {
     return NextResponse.json(
       { error: "Please save your email address in My Profile first." },

@@ -13,7 +13,10 @@ export async function GET(request: NextRequest) {
   const auth = await requireApiAuth();
   if (!auth.ok) return auth.response;
 
-  const unlock = await getAmountUnlockStatus(auth.user.id);
+  const unlock = await getAmountUnlockStatus(
+    auth.user.id,
+    auth.user.canViewCharges
+  );
   const sp = request.nextUrl.searchParams;
 
   const sortParam = sp.get("sort");
@@ -70,19 +73,37 @@ export async function POST(request: Request) {
       );
     }
 
+    const sanitizedData = auth.user.canViewCharges
+      ? parsed.data
+      : {
+          ...parsed.data,
+          thaalRate: 0,
+          thaalAmount: 0,
+          sarkariRate: 0,
+          sarkariAmount: 0,
+          kitchenCharge: 0,
+          decorationCharge: 0,
+          otherCharge: 0,
+          hallCharges: {},
+          depositAmount: 0,
+          depositStatus: "NONE" as const,
+          paymentMode: "",
+          transactionId: "",
+          amountNotes: "",
+        };
+
     const created = await createEventBooking(
-      parsed.data,
+      sanitizedData,
       {
         id: auth.user.id,
         name: auth.user.name || auth.user.username,
       },
-      true
+      auth.user.canViewCharges
     );
 
-    const printUnlockExpiresAt = await setBookingPrintUnlockCookie(
-      auth.user.id,
-      created.id
-    );
+    const printUnlockExpiresAt = auth.user.canViewCharges
+      ? await setBookingPrintUnlockCookie(auth.user.id, created.id)
+      : null;
 
     return NextResponse.json(
       { ok: true, event: created, printUnlockExpiresAt },

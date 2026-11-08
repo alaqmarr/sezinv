@@ -41,7 +41,7 @@ import {
 async function HomeOverviewContent() {
   await connection();
   const user = await requireServerPageAccess("/");
-  const unlock = await getAmountUnlockStatus(user.id);
+  const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
 
   const todayKey = getISTTodayString();
   const { startOfDay } = getISTDayBounds(todayKey);

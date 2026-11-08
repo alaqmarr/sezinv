@@ -3,6 +3,7 @@
 import React, { useState } from "react";
 import { useRouter } from "next/navigation";
 import { Eye, EyeOff, KeyRound, Lock, Mail } from "lucide-react";
+import { useAuthSession } from "@sezsec/rbac/rbac.context";
 import { Button, Modal, OtpInput, notify } from "@sezsec/ui";
 
 export function AmountUnlockModal({
@@ -15,6 +16,7 @@ export function AmountUnlockModal({
   onUnlocked?: () => void;
 }) {
   const router = useRouter();
+  const { user } = useAuthSession();
   const [step, setStep] = useState<"request" | "verify">("request");
   const [maskedEmail, setMaskedEmail] = useState<string>("");
   const [devPreviewCode, setDevPreviewCode] = useState<string | null>(null);
@@ -77,6 +79,10 @@ export function AmountUnlockModal({
       setLoading(false);
     }
   };
+
+  if (!user.canViewCharges) {
+    return null;
+  }
 
   return (
     <Modal
@@ -166,8 +172,13 @@ export function AmountAccessBar({
   compact?: boolean;
 }) {
   const router = useRouter();
+  const { user } = useAuthSession();
   const [modalOpen, setModalOpen] = useState(false);
   const [locking, setLocking] = useState(false);
+
+  if (!user.canViewCharges) {
+    return null;
+  }
 
   const handleLockNow = async () => {
     setLocking(true);
