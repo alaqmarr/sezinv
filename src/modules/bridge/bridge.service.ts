@@ -1,6 +1,6 @@
 import crypto from "node:crypto";
 import { NextResponse } from "next/server";
-import { Prisma, type EventType } from "@/generated/prisma/client";
+import { Prisma, type EventType, type Role } from "@/generated/prisma/client";
 import { db, withWriteLock } from "@sezsec/db";
 import { recordActivity } from "@sezsec/logs";
 import {
@@ -71,6 +71,113 @@ export function verifyBridgeRequest(
   }
 
   return { ok: true };
+}
+
+function getBridgeSecretKey(): string {
+  return (process.env.SEZSEC_BRIDGE_KEY || DEFAULT_DEV_BRIDGE_KEY).trim();
+}
+
+function getInternalSezsecUrl(): string {
+  return (process.env.SEZSEC_INTERNAL_URL || "http://127.0.0.1:3334")
+    .trim()
+    .replace(/\/+$/, "");
+}
+
+async function loopbackPostToSezsec(
+  path: string,
+  payload: unknown
+): Promise<void> {
+  const primaryBase = getInternalSezsecUrl();
+  const candidateBases = [primaryBase];
+  if (primaryBase.includes("127.0.0.1")) {
+    candidateBases.push(primaryBase.replace("127.0.0.1", "localhost"));
+  } else if (primaryBase.includes("localhost")) {
+    candidateBases.push(primaryBase.replace("localhost", "127.0.0.1"));
+  }
+
+  for (const base of candidateBases) {
+    try {
+      const res = await fetch(`${base}${path}`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "x-sezsec-bridge-key": getBridgeSecretKey(),
+          "x-sezsec-source": "jamatevents-3333",
+        },
+        body: JSON.stringify(payload),
+        cache: "no-store",
+        signal: AbortSignal.timeout(3500),
+      });
+      if (res.ok) return;
+    } catch {
+      // Try next candidate or fail gracefully if companion service is restarting
+    }
+  }
+}
+
+export async function syncUserByIdToSezsec(userId: string): Promise<void> {
+  try {
+    const user = await db.user.findUnique({
+      where: { id: userId },
+      include: {
+        moduleAccess: {
+          select: { moduleId: true },
+        },
+      },
+    });
+    if (!user) return;
+    await loopbackPostToSezsec("/api/bridge/users/sync", {
+      action: "UPSERT",
+      userId: user.id,
+      user: {
+        id: user.id,
+        username: user.username,
+        password: user.password,
+        name: user.name,
+        email: user.email,
+        mobile: user.mobile,
+        its: user.its,
+        role: user.role,
+        moduleIds: user.moduleAccess.map((m) => m.moduleId),
+      },
+    });
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function pushUserDeleteToSezsec(
+  userId: string,
+  username?: string
+): Promise<void> {
+  await loopbackPostToSezsec("/api/bridge/users/sync", {
+    action: "DELETE",
+    userId,
+    username,
+  });
+}
+
+export async function pushHallsToSezsec(): Promise<void> {
+  try {
+    const halls = await listBridgeHalls();
+    await loopbackPostToSezsec("/api/bridge/halls/sync", { halls });
+  } catch {
+    // Non-blocking
+  }
+}
+
+export async function pushEventChangeToSezsec(payload: {
+  action: "UPSERT" | "DELETE";
+  eventId: string;
+  event?: {
+    title?: string;
+    occasionDate?: string;
+    occasionTime?: string;
+    eventType?: string;
+    status?: string;
+  };
+}): Promise<void> {
+  await loopbackPostToSezsec("/api/bridge/events/sync", payload);
 }
 
 // Deliberately excludes ALL financial/charge fields so sensitive amounts never leave jamatevents
@@ -374,3 +481,345 @@ export async function listBridgeInventory(): Promise<BridgeInventoryItemDto[]> {
     },
   });
 }
+
+const VALID_SYNC_ROLES = new Set<Role>([
+  "ADMIN",
+  "ADMIN_CUSTOM",
+  "MANAGER",
+  "STAFF",
+  "WATCHER",
+  "USER",
+]);
+
+export async function syncBridgeUserAccount(payload: {
+  action: "UPSERT" | "DELETE";
+  userId: string;
+  user?: {
+    id: string;
+    username: string;
+    password: string;
+    name: string | null;
+    email: string | null;
+    mobile: string | null;
+    its: string | null;
+    role: string;
+    moduleIds?: string[];
+    modules?: Array<{
+      id: string;
+      name: string;
+      description: string | null;
+      icon: string | null;
+    }>;
+  };
+}): Promise<{ ok: true }> {
+  await withWriteLock(() =>
+    db.$transaction(async (tx) => {
+      if (payload.action === "DELETE") {
+        const existing = await tx.user.findFirst({
+          where: {
+            OR: [
+              { id: payload.userId },
+              ...(payload.user?.username
+                ? [{ username: payload.user.username }]
+                : []),
+            ],
+          },
+          select: { id: true },
+        });
+        if (existing) {
+          await tx.user.delete({ where: { id: existing.id } });
+        }
+        return;
+      }
+
+      const u = payload.user;
+      if (!u || !u.username) return;
+
+      const safeRole: Role = VALID_SYNC_ROLES.has(u.role as Role)
+        ? (u.role as Role)
+        : "STAFF";
+
+      // Ensure any referenced modules exist locally (e.g. event_charges, hall-*)
+      if (Array.isArray(u.modules)) {
+        for (const m of u.modules) {
+          const byId = await tx.module.findUnique({ where: { id: m.id } });
+          const byName = await tx.module.findUnique({ where: { name: m.name } });
+          if (!byId && !byName) {
+            await tx.module.create({
+              data: {
+                id: m.id,
+                name: m.name,
+                description: m.description,
+                icon: m.icon,
+              },
+            });
+          }
+        }
+      }
+
+      const cleanIts = u.its?.trim() || null;
+      const byId = await tx.user.findUnique({ where: { id: u.id } });
+      const byUsername = await tx.user.findUnique({
+        where: { username: u.username },
+      });
+      const byIts = cleanIts
+        ? await tx.user.findUnique({ where: { its: cleanIts } })
+        : null;
+
+      const target = byId || byUsername || byIts;
+      const safeIts =
+        cleanIts && (!byIts || (target && byIts.id === target.id))
+          ? cleanIts
+          : null;
+
+      let localUserId: string;
+      if (target) {
+        const canUpdateUsername =
+          !byUsername || byUsername.id === target.id;
+        const updated = await tx.user.update({
+          where: { id: target.id },
+          data: {
+            ...(canUpdateUsername ? { username: u.username } : {}),
+            ...(u.password ? { password: u.password } : {}),
+            name: u.name,
+            email: u.email,
+            mobile: u.mobile,
+            its: safeIts,
+            role: safeRole,
+          },
+        });
+        localUserId = updated.id;
+      } else {
+        const created = await tx.user.create({
+          data: {
+            id: u.id,
+            username: u.username,
+            password: u.password,
+            name: u.name,
+            email: u.email,
+            mobile: u.mobile,
+            its: safeIts,
+            role: safeRole,
+          },
+        });
+        localUserId = created.id;
+      }
+
+      // Sync shared permission modules (event_charges & hall-* modules) without wiping jamatevents-specific section access
+      if (Array.isArray(u.moduleIds)) {
+        const syncedSpecialIds = u.moduleIds.filter(
+          (id) =>
+            id === "event_charges" ||
+            id.startsWith("hall-") ||
+            id === "view-private-events-sezsecorg" ||
+            id === "update-thaal-count-sezsecorg"
+        );
+
+        await tx.userModuleAccess.deleteMany({
+          where: {
+            userId: localUserId,
+            OR: [
+              { moduleId: "event_charges" },
+              { moduleId: { startsWith: "hall-" } },
+              { moduleId: "view-private-events-sezsecorg" },
+              { moduleId: "update-thaal-count-sezsecorg" },
+            ],
+          },
+        });
+
+            for (const modId of syncedSpecialIds) {
+              const exists = await tx.module.findUnique({ where: { id: modId } });
+              if (exists) {
+                await tx.userModuleAccess.upsert({
+                  where: {
+                    userId_moduleId: {
+                      userId: localUserId,
+                      moduleId: modId,
+                    },
+                  },
+                  update: {},
+                  create: {
+                    userId: localUserId,
+                    moduleId: modId,
+                  },
+                });
+              }
+            }
+          }
+        })
+      );
+
+  return { ok: true };
+}
+
+export async function getBridgeBootstrapCounts(): Promise<
+  Record<string, number>
+> {
+  const [
+    users,
+    modules,
+    module_links,
+    user_module_access,
+    halls,
+    user_fee_configs,
+    fee_records,
+    fee_transactions,
+    event_contributions,
+    fee_transaction_allocations,
+    floor_configs,
+    attendance_event_clones,
+    attendance_records,
+    member_registrations,
+    khidmat_requests,
+    blogs,
+    banners,
+  ] = await Promise.all([
+    db.user.count(),
+    db.module.count(),
+    db.moduleLink.count(),
+    db.userModuleAccess.count(),
+    db.hall.count(),
+    db.userFeeConfig.count(),
+    db.feeRecord.count(),
+    db.feeTransaction.count(),
+    db.eventContribution.count(),
+    db.feeTransactionAllocation.count(),
+    db.floorConfig.count(),
+    db.attendanceEventClone.count(),
+    db.attendanceRecord.count(),
+    db.memberRegistration.count(),
+    db.khidmatRequest.count(),
+    db.blog.count(),
+    db.banner.count(),
+  ]);
+
+  return {
+    users,
+    modules,
+    module_links,
+    user_module_access,
+    halls,
+    user_fee_configs,
+    fee_records,
+    fee_transactions,
+    event_contributions,
+    fee_transaction_allocations,
+    floor_configs,
+    attendance_event_clones,
+    attendance_records,
+    member_registrations,
+    khidmat_requests,
+    blogs,
+    banners,
+  };
+}
+
+export async function getBridgeBootstrapSnapshot() {
+  const [
+    modules,
+    moduleLinks,
+    users,
+    userModuleAccess,
+    halls,
+    khidmatRequests,
+    memberRegistrations,
+    blogs,
+    banners,
+    userFeeConfigs,
+    feeRecords,
+    feeTransactions,
+    eventContributions,
+    feeTransactionAllocations,
+    floorConfigsRaw,
+    attendanceRecords,
+    attendanceEventClonesRaw,
+  ] = await Promise.all([
+    db.module.findMany(),
+    db.moduleLink.findMany(),
+    db.user.findMany(),
+    db.userModuleAccess.findMany(),
+    db.hall.findMany({
+      orderBy: { name: "asc" },
+      select: { id: true, name: true, width: true, length: true },
+    }),
+    db.khidmatRequest.findMany(),
+    db.memberRegistration.findMany(),
+    db.blog.findMany(),
+    db.banner.findMany(),
+    db.userFeeConfig.findMany(),
+    db.feeRecord.findMany(),
+    db.feeTransaction.findMany(),
+    db.eventContribution.findMany(),
+    db.feeTransactionAllocation.findMany(),
+    db.floorConfig.findMany({
+      include: {
+        heads: { select: { id: true } },
+        subHeads: { select: { id: true } },
+        members: { select: { id: true } },
+      },
+    }),
+    db.attendanceRecord.findMany(),
+    db.attendanceEventClone.findMany({
+      include: {
+        event: {
+          select: {
+            id: true,
+            name: true,
+            description: true,
+            occasionDate: true,
+            occasionTime: true,
+            eventType: true,
+          },
+        },
+      },
+    }),
+  ]);
+
+  const floorConfigs = floorConfigsRaw.map((fc) => ({
+    id: fc.id,
+    name: fc.name,
+    createdAt: fc.createdAt.toISOString(),
+    updatedAt: fc.updatedAt.toISOString(),
+    headIds: fc.heads.map((u) => u.id),
+    subHeadIds: fc.subHeads.map((u) => u.id),
+    memberIds: fc.members.map((u) => u.id),
+  }));
+
+  const attendanceEventClones = attendanceEventClonesRaw.map((aec) => ({
+    id: aec.id,
+    eventId: aec.eventId,
+    isActive: aec.isActive,
+    startTime: aec.startTime.toISOString(),
+    endTime: aec.endTime.toISOString(),
+    createdAt: aec.createdAt.toISOString(),
+    eventTitle: aec.event
+      ? String(aec.event.description || aec.event.name || "Jamaat Miqaat")
+      : null,
+    eventDate: aec.event ? aec.event.occasionDate.toISOString() : null,
+    eventTime: aec.event?.occasionTime
+      ? formatTimeDisplay(aec.event.occasionTime)
+      : null,
+    eventType: aec.event?.eventType ?? null,
+  }));
+
+  return {
+    modules,
+    moduleLinks,
+    users,
+    userModuleAccess,
+    halls,
+    khidmatRequests,
+    memberRegistrations,
+    blogs,
+    banners,
+    userFeeConfigs,
+    feeRecords,
+    feeTransactions,
+    eventContributions,
+    feeTransactionAllocations,
+    floorConfigs,
+    attendanceRecords,
+    attendanceEventClones,
+  };
+}
+

@@ -1,4 +1,5 @@
 import { connection, NextResponse, type NextRequest } from "next/server";
+import { pushEventChangeToSezsec } from "@sezsec/bridge";
 import { db, withWriteTransaction } from "@sezsec/db";
 import { getEventAmountUnlockStatus } from "@sezsec/auth/booking-print-unlock.helper";
 import { isEventLocked } from "@sezsec/shared";
@@ -89,6 +90,11 @@ export async function PATCH(
         auth.user.canViewCharges
       );
       const refreshed = await getEventById(id, unlock.unlocked);
+      void pushEventChangeToSezsec({
+        action: "UPSERT",
+        eventId: id,
+        event: { status: body.status },
+      });
       return NextResponse.json({ ok: true, event: refreshed });
     }
 
@@ -171,6 +177,17 @@ export async function PATCH(
       unlock.unlocked
     );
 
+    void pushEventChangeToSezsec({
+      action: "UPSERT",
+      eventId: id,
+      event: {
+        title: parsed.data.description || parsed.data.name,
+        occasionDate: parsed.data.occasionDate,
+        occasionTime: parsed.data.occasionTime,
+        eventType: parsed.data.eventType,
+        status: parsed.data.status,
+      },
+    });
     return NextResponse.json({ ok: true, event: updated });
   } catch (err) {
     const msg =
@@ -225,5 +242,6 @@ export async function DELETE(
     userName: auth.user.name || auth.user.username,
   });
 
+  void pushEventChangeToSezsec({ action: "DELETE", eventId: id });
   return NextResponse.json({ ok: true });
 }

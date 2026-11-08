@@ -1,4 +1,5 @@
 import bcrypt from "bcryptjs";
+import { pushUserDeleteToSezsec, syncUserByIdToSezsec } from "@sezsec/bridge";
 import { db, withWriteTransaction } from "@sezsec/db";
 import { ROLE_LABELS, type AppRole } from "@sezsec/shared";
 import { recordActivity } from "@sezsec/logs";
@@ -127,6 +128,7 @@ export async function createTeamMember(
     });
   });
 
+  await syncUserByIdToSezsec(created.id);
   await recordActivity({
     action: "USER_CREATED",
     summary: `Added team member ${created.name || created.username} (${ROLE_LABELS[created.role] || created.role})`,
@@ -235,6 +237,7 @@ export async function updateTeamMember(
     return user;
   });
 
+  await syncUserByIdToSezsec(updated.id);
   await recordActivity({
     action: "USER_UPDATED",
     summary: `Updated team member ${updated.name || updated.username}`,
@@ -265,6 +268,7 @@ export async function deleteTeamMember(
     return target;
   });
 
+  await pushUserDeleteToSezsec(deleted.id, deleted.username);
   await recordActivity({
     action: "USER_DELETED",
     summary: `Removed team member ${deleted.name || deleted.username}`,

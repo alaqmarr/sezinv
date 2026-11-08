@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { syncUserByIdToSezsec } from "@sezsec/bridge";
 import { db, withWriteLock } from "@sezsec/db";
 import { verifyEmailOtp } from "@sezsec/auth";
 
@@ -43,6 +44,7 @@ export async function POST(request: Request) {
       })
     );
 
+    await syncUserByIdToSezsec(user.id);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(

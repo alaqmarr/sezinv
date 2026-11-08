@@ -106,6 +106,45 @@ replacePlaceholder("SEZSEC_BRIDGE_KEY", "replace-with-strong-shared-bridge-key")
 fs.writeFileSync(".env", envText, { mode: 0o600 });
 NODE_EOF
   fi
+
+  # Ensure SEZSEC_BRIDGE_KEY and SEZSEC_INTERNAL_URL are present & aligned with sibling ../sezsecnew/.env
+  node <<'NODE_EOF'
+const fs = require("node:fs");
+const path = require("node:path");
+
+if (fs.existsSync(".env")) {
+  let envText = fs.readFileSync(".env", "utf8");
+  let changed = false;
+
+  let siblingBridgeKey = "";
+  for (const rel of ["../sezsecnew/.env"]) {
+    const candidate = path.resolve(process.cwd(), rel);
+    if (fs.existsSync(candidate)) {
+      const raw = fs.readFileSync(candidate, "utf8");
+      const m = raw.match(/^\s*SEZSEC_BRIDGE_KEY\s*=\s*"?([^"#\r\n]+)"?/m);
+      if (m && m[1].trim() && !m[1].includes("replace-with")) {
+        siblingBridgeKey = m[1].trim();
+        break;
+      }
+    }
+  }
+
+  if (!/^\s*SEZSEC_BRIDGE_KEY\s*=/m.test(envText)) {
+    const keyToUse = siblingBridgeKey || "sezsec-internal-bridge-key-2026";
+    envText = envText.replace(/\s*$/, `\nSEZSEC_BRIDGE_KEY="${keyToUse}"\n`);
+    changed = true;
+  }
+
+  if (!/^\s*SEZSEC_INTERNAL_URL\s*=/m.test(envText)) {
+    envText = envText.replace(/\s*$/, `\nSEZSEC_INTERNAL_URL="http://127.0.0.1:3334"\n`);
+    changed = true;
+  }
+
+  if (changed) {
+    fs.writeFileSync(".env", envText, { mode: 0o600 });
+  }
+}
+NODE_EOF
   chmod 600 ".env" 2>/dev/null || true
 
   # Resolve SQLite database path from .env (defaults to ./data/jamatevents.db)

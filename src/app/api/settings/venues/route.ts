@@ -1,4 +1,5 @@
 import { NextResponse, type NextRequest } from "next/server";
+import { pushHallsToSezsec } from "@sezsec/bridge";
 import { db, withWriteLock } from "@sezsec/db";
 import { requireApiAuth } from "@sezsec/rbac/rbac.server";
 
@@ -31,6 +32,7 @@ export async function POST(request: Request) {
       })
     );
 
+    void pushHallsToSezsec();
     return NextResponse.json({ ok: true, hall });
   } catch {
     return NextResponse.json(

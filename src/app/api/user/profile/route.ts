@@ -1,5 +1,6 @@
 import bcrypt from "bcryptjs";
 import { NextResponse } from "next/server";
+import { syncUserByIdToSezsec } from "@sezsec/bridge";
 import { db, withWriteLock } from "@sezsec/db";
 import { setSessionCookie, verifyEmailOtp } from "@sezsec/auth";
 import type { AppRole } from "@sezsec/shared";
@@ -52,6 +53,7 @@ export async function PATCH(request: Request) {
       canViewCharges: auth.user.canViewCharges,
     });
 
+    await syncUserByIdToSezsec(updated.id);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(
@@ -105,6 +107,7 @@ export async function POST(request: Request) {
       })
     );
 
+    await syncUserByIdToSezsec(auth.user.id);
     return NextResponse.json({ ok: true });
   } catch {
     return NextResponse.json(
