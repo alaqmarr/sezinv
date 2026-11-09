@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useRef, useState } from "react";
+import React, { useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   CheckCircle2,
@@ -31,7 +31,7 @@ import {
   notify,
 } from "@sezsec/ui";
 
-interface HealthPayload {
+export interface HealthPayload {
   database: DatabaseHealthReport;
   emailConfigured: boolean;
   senderEmail?: string;
@@ -42,14 +42,16 @@ export function SystemMaintenancePanel({
   userEmail,
   isAdmin,
   initialEmailSettings,
+  initialHealth,
 }: {
   userEmail: string | null;
   isAdmin: boolean;
   initialEmailSettings: OfficeEmailSettingsSummary;
+  initialHealth: HealthPayload;
 }) {
   const router = useRouter();
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const [health, setHealth] = useState<HealthPayload | null>(null);
+  const [health, setHealth] = useState<HealthPayload>(initialHealth);
 
   // Database-controlled outgoing email settings
   const [smtpEmail, setSmtpEmail] = useState(
@@ -82,10 +84,6 @@ export function SystemMaintenancePanel({
       .then((d) => setHealth(d))
       .catch(() => null);
   };
-
-  useEffect(() => {
-    refreshHealth();
-  }, []);
 
   const handleSaveEmailConfig = async (e: React.FormEvent) => {
     e.preventDefault();

@@ -1,4 +1,3 @@
-import React, { Suspense } from "react";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { Clock, MapPin, Phone, Sparkles, Users } from "lucide-react";
@@ -15,19 +14,19 @@ import {
   CardBody,
   CardHeader,
   KeelArchBanner,
-  Skeleton,
 } from "@sezsec/ui";
 
-async function PublicEventPassContent({
-  paramsPromise,
+export default async function PublicEventPage({
+  params,
 }: {
-  paramsPromise: Promise<{ id: string }>;
+  params: Promise<{ id: string }>;
 }) {
   await connection();
-  const { id } = await paramsPromise;
+  const { id } = await params;
+  const decodedId = decodeURIComponent(id);
   const [event, logs] = await Promise.all([
-    getEventById(decodeURIComponent(id), false),
-    listEventActivity(decodeURIComponent(id)),
+    getEventById(decodedId, false),
+    listEventActivity(decodedId),
   ]);
 
   if (!event) notFound();
@@ -193,24 +192,5 @@ async function PublicEventPassContent({
         </Card>
       ) : null}
     </div>
-  );
-}
-
-export default function PublicEventPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  return (
-    <Suspense
-      fallback={
-        <div className="w-full space-y-4 px-4 py-8 sm:px-6 lg:px-10">
-          <Skeleton className="h-24 w-full" />
-          <Skeleton className="h-64 w-full" />
-        </div>
-      }
-    >
-      <PublicEventPassContent paramsPromise={params} />
-    </Suspense>
   );
 }

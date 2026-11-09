@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useEffect, useMemo, useState } from "react";
+import React, { useEffect, useLayoutEffect, useMemo, useRef, useState } from "react";
 import { useRouter } from "next/navigation";
 import {
   AlertTriangle,
@@ -15,6 +15,7 @@ import {
   isIgnoredConflictHall,
   isSelfEventVenue,
   to24HourInput,
+  toISTDateKey,
 } from "@sezsec/shared";
 import {
   ArabesqueDivider,
@@ -42,15 +43,7 @@ interface DirectoryEntry {
   phone: string;
 }
 
-export function EventBookingForm({
-  mode,
-  initialEvent,
-  defaultDate,
-  halls,
-  caterers,
-  decorators,
-  amountsUnlocked,
-}: {
+export interface EventBookingFormProps {
   mode: "create" | "edit";
   initialEvent?: PortalEvent;
   defaultDate?: string;
@@ -58,6 +51,57 @@ export function EventBookingForm({
   caterers: DirectoryEntry[];
   decorators: DirectoryEntry[];
   amountsUnlocked: boolean;
+}
+
+export function EventBookingForm(props: EventBookingFormProps) {
+  const { bfcacheId } = useRouter();
+  const [resetNonce, setResetNonce] = useState(0);
+  const shouldResetOnHideRef = useRef(false);
+
+  useEffect(() => {
+    if (props.mode !== "create") return;
+    const onForceReset = () => setResetNonce((n) => n + 1);
+    window.addEventListener("sezsec:reset-new-booking", onForceReset);
+    return () =>
+      window.removeEventListener("sezsec:reset-new-booking", onForceReset);
+  }, [props.mode]);
+
+  useLayoutEffect(() => {
+    return () => {
+      if (shouldResetOnHideRef.current) {
+        shouldResetOnHideRef.current = false;
+        setResetNonce((n) => n + 1);
+      }
+    };
+  }, []);
+
+  const instanceKey =
+    props.mode === "create"
+      ? `create:${bfcacheId}:${props.defaultDate ?? "today"}:${resetNonce}`
+      : `edit:${props.initialEvent?.id ?? ""}:${props.initialEvent?.updatedAt ?? ""}:${bfcacheId}`;
+
+  return (
+    <EventBookingFormInner
+      key={instanceKey}
+      {...props}
+      onMarkSubmittedForReset={() => {
+        shouldResetOnHideRef.current = true;
+      }}
+    />
+  );
+}
+
+function EventBookingFormInner({
+  mode,
+  initialEvent,
+  defaultDate,
+  halls,
+  caterers,
+  decorators,
+  amountsUnlocked,
+  onMarkSubmittedForReset,
+}: EventBookingFormProps & {
+  onMarkSubmittedForReset?: () => void;
 }) {
   const router = useRouter();
   const { canViewCharges } = usePermissions();
@@ -71,8 +115,10 @@ export function EventBookingForm({
 
   const [occasionDate, setOccasionDate] = useState(
     initialEvent
-      ? initialEvent.occasionDate.slice(0, 10)
-      : defaultDate || getISTTodayString()
+      ? toISTDateKey(initialEvent.occasionDate)
+      : defaultDate
+        ? toISTDateKey(defaultDate)
+        : getISTTodayString()
   );
   const [occasionTime, setOccasionTime] = useState(
     initialEvent ? to24HourInput(initialEvent.occasionTime) : "19:30"
@@ -420,6 +466,7 @@ export function EventBookingForm({
       }
 
       if (mode === "create") {
+        onMarkSubmittedForReset?.();
         notify.success(
           "Booking saved — opening print page",
           canViewCharges
@@ -434,7 +481,6 @@ export function EventBookingForm({
         );
         router.push(`/events/${encodeURIComponent(data.event.id)}`);
       }
-      router.refresh();
     } catch {
       notify.error("Network error", "Could not save booking. Please try again.");
     } finally {

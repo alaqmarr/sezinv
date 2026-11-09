@@ -1,4 +1,3 @@
-import React, { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import {
@@ -34,11 +33,10 @@ import {
   CardBody,
   CardHeader,
   KeelArchBanner,
-  Skeleton,
   StatTile,
 } from "@sezsec/ui";
 
-async function HomeOverviewContent() {
+export default async function HomeOverviewPage() {
   await connection();
   const user = await requireServerPageAccess("/");
   const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
@@ -191,26 +189,5 @@ async function HomeOverviewContent() {
 
       <MisriScheduleCalendar events={allEvents} canCreateEvent={canCreate} />
     </div>
-  );
-}
-
-export default function HomeOverviewPage() {
-  return (
-    <Suspense
-      fallback={
-        <div className="space-y-6">
-          <Skeleton className="h-24 w-full" />
-          <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-            <Skeleton className="h-28" />
-          </div>
-          <Skeleton className="h-96 w-full" />
-        </div>
-      }
-    >
-      <HomeOverviewContent />
-    </Suspense>
   );
 }

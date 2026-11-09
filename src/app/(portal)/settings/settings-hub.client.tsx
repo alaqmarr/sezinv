@@ -10,6 +10,7 @@ import {
   Users,
   Utensils,
 } from "lucide-react";
+import type { MigrationPreviewReport } from "@sezsec/migration";
 import type { PortalMasterSettings } from "@sezsec/settings";
 import type { TeamMemberRecord } from "@sezsec/users";
 import { Tabs, type TabItem } from "@sezsec/ui";
@@ -20,7 +21,7 @@ import {
 } from "./directories.panel";
 import { TeamManagementPanel } from "./team.panel";
 import { DatabaseMigrationPanel } from "./migration.panel";
-import { SystemMaintenancePanel } from "./system.panel";
+import { SystemMaintenancePanel, type HealthPayload } from "./system.panel";
 
 export function SettingsHubClient({
   initialTab,
@@ -29,6 +30,8 @@ export function SettingsHubClient({
   currentUserId,
   currentUserEmail,
   isFullAdmin,
+  initialHealth,
+  initialMigrationReport,
 }: {
   initialTab?: string;
   settings: PortalMasterSettings;
@@ -36,6 +39,8 @@ export function SettingsHubClient({
   currentUserId: string;
   currentUserEmail: string | null;
   isFullAdmin: boolean;
+  initialHealth: HealthPayload;
+  initialMigrationReport: MigrationPreviewReport | null;
 }) {
   const tabs: TabItem[] = [
     {
@@ -126,8 +131,8 @@ export function SettingsHubClient({
         />
       ) : null}
 
-      {activeTab === "migration" && isFullAdmin ? (
-        <DatabaseMigrationPanel />
+      {activeTab === "migration" && isFullAdmin && initialMigrationReport ? (
+        <DatabaseMigrationPanel initialReport={initialMigrationReport} />
       ) : null}
 
       {activeTab === "system" ? (
@@ -135,6 +140,7 @@ export function SettingsHubClient({
           userEmail={currentUserEmail}
           isAdmin={isFullAdmin}
           initialEmailSettings={settings.emailSettings}
+          initialHealth={initialHealth}
         />
       ) : null}
     </div>

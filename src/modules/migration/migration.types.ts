@@ -9,6 +9,7 @@ export interface MigrationTableCount {
 export interface MigrationPreviewReport {
   neonConfigured: boolean;
   neonReachable: boolean;
+  onlineChecked?: boolean;
   error?: string;
   tables: MigrationTableCount[];
   totalNeonRows: number;

@@ -1,4 +1,5 @@
 import { connection, NextResponse, type NextRequest } from "next/server";
+import { pushEventChangeToSezsec } from "@sezsec/bridge";
 import { getAmountUnlockStatus } from "@sezsec/auth";
 import { setBookingPrintUnlockCookie } from "@sezsec/auth/booking-print-unlock.helper";
 import { requireApiAuth } from "@sezsec/rbac/rbac.server";
@@ -104,6 +105,18 @@ export async function POST(request: Request) {
     const printUnlockExpiresAt = auth.user.canViewCharges
       ? await setBookingPrintUnlockCookie(auth.user.id, created.id)
       : null;
+
+    void pushEventChangeToSezsec({
+      action: "UPSERT",
+      eventId: created.id,
+      event: {
+        title: created.description || created.name,
+        occasionDate: created.occasionDate,
+        occasionTime: created.occasionTime,
+        eventType: created.eventType,
+        status: created.status,
+      },
+    });
 
     return NextResponse.json(
       { ok: true, event: created, printUnlockExpiresAt },

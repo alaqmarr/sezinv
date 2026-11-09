@@ -181,11 +181,11 @@ export async function PATCH(
       action: "UPSERT",
       eventId: id,
       event: {
-        title: parsed.data.description || parsed.data.name,
-        occasionDate: parsed.data.occasionDate,
-        occasionTime: parsed.data.occasionTime,
-        eventType: parsed.data.eventType,
-        status: parsed.data.status,
+        title: updated.description || updated.name,
+        occasionDate: updated.occasionDate,
+        occasionTime: updated.occasionTime,
+        eventType: updated.eventType,
+        status: updated.status,
       },
     });
     return NextResponse.json({ ok: true, event: updated });

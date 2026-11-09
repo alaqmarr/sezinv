@@ -1,4 +1,3 @@
-import React, { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { ArrowLeft } from "lucide-react";
@@ -6,38 +5,21 @@ import { getAmountUnlockStatus } from "@sezsec/auth";
 import { requireServerPageAccess } from "@sezsec/rbac/rbac.server";
 import { getPortalMasterSettings } from "@sezsec/settings/settings.service";
 import { EventBookingForm } from "@sezsec/events";
-import { PageHeader, Skeleton } from "@sezsec/ui";
+import { PageHeader } from "@sezsec/ui";
 
-async function NewEventFormContent({
-  searchParamsPromise,
+export default async function NewEventPage({
+  searchParams,
 }: {
-  searchParamsPromise: Promise<{ date?: string }>;
+  searchParams: Promise<{ date?: string }>;
 }) {
   await connection();
   const user = await requireServerPageAccess("/events/new");
   const [unlock, master, sp] = await Promise.all([
     getAmountUnlockStatus(user.id, user.canViewCharges),
     getPortalMasterSettings(),
-    searchParamsPromise,
+    searchParams,
   ]);
 
-  return (
-    <EventBookingForm
-      mode="create"
-      defaultDate={sp.date}
-      halls={master.halls}
-      caterers={master.caterers}
-      decorators={master.decorators}
-      amountsUnlocked={unlock.unlocked}
-    />
-  );
-}
-
-export default function NewEventPage({
-  searchParams,
-}: {
-  searchParams: Promise<{ date?: string }>;
-}) {
   return (
     <div className="space-y-6">
       <PageHeader
@@ -55,16 +37,14 @@ export default function NewEventPage({
         }
       />
 
-      <Suspense
-        fallback={
-          <div className="space-y-5">
-            <Skeleton className="h-48 w-full" />
-            <Skeleton className="h-72 w-full" />
-          </div>
-        }
-      >
-        <NewEventFormContent searchParamsPromise={searchParams} />
-      </Suspense>
+      <EventBookingForm
+        mode="create"
+        defaultDate={sp.date}
+        halls={master.halls}
+        caterers={master.caterers}
+        decorators={master.decorators}
+        amountsUnlocked={unlock.unlocked}
+      />
     </div>
   );
 }

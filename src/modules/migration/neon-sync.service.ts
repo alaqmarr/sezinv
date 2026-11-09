@@ -215,6 +215,34 @@ function toNullableDate(val: unknown): Date | null {
   return Number.isNaN(d.getTime()) ? null : d;
 }
 
+export async function getLocalMigrationBaselineReport(): Promise<MigrationPreviewReport> {
+  const neonConfigured = Boolean(
+    (process.env.NEON_DATABASE_URL || "").trim()
+  );
+  const sqliteCounts = await Promise.all(
+    TABLE_DEFINITIONS.map((t) => t.countSqlite())
+  );
+  const tables: MigrationTableCount[] = TABLE_DEFINITIONS.map((def, idx) => ({
+    table: def.table,
+    label: def.label,
+    group: def.group,
+    neonCount: 0,
+    sqliteCount: sqliteCounts[idx],
+  }));
+
+  return {
+    neonConfigured,
+    neonReachable: false,
+    onlineChecked: !neonConfigured,
+    error: neonConfigured
+      ? undefined
+      : "Previous database connection URL (NEON_DATABASE_URL) is not set in .env.",
+    tables,
+    totalNeonRows: 0,
+    totalSqliteRows: sqliteCounts.reduce((a, b) => a + b, 0),
+  };
+}
+
 export async function inspectNeonVsSqliteCounts(
   customNeonUrl?: string
 ): Promise<MigrationPreviewReport> {
@@ -235,6 +263,7 @@ export async function inspectNeonVsSqliteCounts(
     return {
       neonConfigured: false,
       neonReachable: false,
+      onlineChecked: true,
       error: "Previous database connection URL (NEON_DATABASE_URL) is not set in .env.",
       tables,
       totalNeonRows: 0,
@@ -272,6 +301,7 @@ export async function inspectNeonVsSqliteCounts(
     return {
       neonConfigured: true,
       neonReachable: true,
+      onlineChecked: true,
       tables,
       totalNeonRows: Object.values(neonCountMap).reduce((a, b) => a + b, 0),
       totalSqliteRows: sqliteCounts.reduce((a, b) => a + b, 0),
@@ -291,6 +321,7 @@ export async function inspectNeonVsSqliteCounts(
     return {
       neonConfigured: true,
       neonReachable: false,
+      onlineChecked: true,
       error: msg,
       tables,
       totalNeonRows: 0,

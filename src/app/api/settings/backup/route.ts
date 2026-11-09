@@ -6,6 +6,7 @@ import { getAmountUnlockStatus } from "@sezsec/auth";
 import {
   formatIST,
   formatTimeDisplay,
+  getISTDayBounds,
   normalizeHallList,
 } from "@sezsec/shared";
 import { requireApiAuth } from "@sezsec/rbac/rbac.server";
@@ -88,8 +89,8 @@ export async function GET(request: NextRequest) {
     const where: Prisma.EventWhereInput = {};
     if (from || to) {
       where.occasionDate = {};
-      if (from) where.occasionDate.gte = new Date(`${from}T00:00:00+05:30`);
-      if (to) where.occasionDate.lte = new Date(`${to}T23:59:59+05:30`);
+      if (from) where.occasionDate.gte = getISTDayBounds(from).startOfDay;
+      if (to) where.occasionDate.lte = getISTDayBounds(to).endOfDay;
     }
     const events = await db.event.findMany({
       where,

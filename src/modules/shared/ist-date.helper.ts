@@ -7,9 +7,22 @@ export function formatIST(
   date: Date | string | number,
   formatStr: string = "dd MMM yyyy"
 ): string {
+  if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    const [year, month, day] = date.trim().split("-").map(Number);
+    const noonIst = new Date(Date.UTC(year, month - 1, day, 6, 30, 0));
+    if (Number.isNaN(noonIst.getTime())) return "";
+    return formatInTimeZone(noonIst, IST_TIMEZONE, formatStr);
+  }
   const d = typeof date === "string" || typeof date === "number" ? new Date(date) : date;
   if (Number.isNaN(d.getTime())) return "";
   return formatInTimeZone(d, IST_TIMEZONE, formatStr);
+}
+
+export function toISTDateKey(date: Date | string | number): string {
+  if (typeof date === "string" && /^\d{4}-\d{2}-\d{2}$/.test(date.trim())) {
+    return date.trim();
+  }
+  return formatIST(date, "yyyy-MM-dd");
 }
 
 export function getISTTodayString(now: Date = new Date()): string {
@@ -108,6 +121,10 @@ export function parseISTEventDateTime(
   const { startOfDay } = getISTDayBounds(dateInput);
   const minutes = parseTimeToMinutes(timeStr || "12:00 PM");
   return new Date(startOfDay.getTime() + minutes * 60_000);
+}
+
+export function parseISTDateOnly(dateInput: Date | string): Date {
+  return parseISTEventDateTime(dateInput, "12:00 PM");
 }
 
 /**

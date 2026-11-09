@@ -123,7 +123,12 @@ export function PortalShell({
             <Link
               key={item.href}
               href={item.href}
-              onClick={() => setMobileOpen(false)}
+              onClick={() => {
+                setMobileOpen(false);
+                if (item.href === "/events/new") {
+                  window.dispatchEvent(new Event("sezsec:reset-new-booking"));
+                }
+              }}
               className={cn(
                 "flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm font-medium transition-colors",
                 isCurrent

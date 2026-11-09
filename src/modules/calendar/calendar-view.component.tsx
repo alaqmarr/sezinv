@@ -73,8 +73,8 @@ export function MisriScheduleCalendar({
   }, [events]);
 
   const cells = useMemo(() => {
-    const firstDay = new Date(viewYear, viewMonth, 1).getDay();
-    const daysInMonth = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const firstDay = new Date(Date.UTC(viewYear, viewMonth, 1)).getUTCDay();
+    const daysInMonth = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
     const out: Array<{
       dateKey: string;
       day: number;
@@ -111,9 +111,9 @@ export function MisriScheduleCalendar({
   const selectedEvents = eventsByDate.get(selectedDate) || [];
 
   const stepMonth = (delta: number) => {
-    const next = new Date(viewYear, viewMonth + delta, 1);
-    setViewYear(next.getFullYear());
-    setViewMonth(next.getMonth());
+    const totalMonths = viewYear * 12 + viewMonth + delta;
+    setViewYear(Math.floor(totalMonths / 12));
+    setViewMonth(((totalMonths % 12) + 12) % 12);
   };
 
   return (

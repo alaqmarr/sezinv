@@ -1,18 +1,17 @@
-import React, { Suspense } from "react";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
 import { getPublicFloorPlanByToken } from "@sezsec/floor-plan/floor-plan.service";
-import { Card, CardBody, CardHeader, KeelArchBanner, Skeleton } from "@sezsec/ui";
+import { Card, CardBody, CardHeader, KeelArchBanner } from "@sezsec/ui";
 
 const PX_PER_FOOT = 10;
 
-async function PublicFloorPlanContent({
-  paramsPromise,
+export default async function PublicFloorPlanPage({
+  params,
 }: {
-  paramsPromise: Promise<{ token: string }>;
+  params: Promise<{ token: string }>;
 }) {
   await connection();
-  const { token } = await paramsPromise;
+  const { token } = await params;
   const plan = await getPublicFloorPlanByToken(token);
   if (!plan) notFound();
 
@@ -60,23 +59,5 @@ async function PublicFloorPlanContent({
         </CardBody>
       </Card>
     </div>
-  );
-}
-
-export default function PublicFloorPlanPage({
-  params,
-}: {
-  params: Promise<{ token: string }>;
-}) {
-  return (
-    <Suspense
-      fallback={
-        <div className="w-full px-4 py-8 sm:px-6 lg:px-10">
-          <Skeleton className="h-96 w-full" />
-        </div>
-      }
-    >
-      <PublicFloorPlanContent paramsPromise={params} />
-    </Suspense>
   );
 }

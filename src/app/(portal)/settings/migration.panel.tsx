@@ -22,15 +22,20 @@ import {
   CardFooter,
   CardHeader,
   ConfirmDialog,
-  Skeleton,
   StatTile,
   notify,
 } from "@sezsec/ui";
 
-export function DatabaseMigrationPanel() {
+export function DatabaseMigrationPanel({
+  initialReport,
+}: {
+  initialReport: MigrationPreviewReport;
+}) {
   const router = useRouter();
-  const [report, setReport] = useState<MigrationPreviewReport | null>(null);
-  const [loadingPreview, setLoadingPreview] = useState(true);
+  const [report, setReport] = useState<MigrationPreviewReport>(initialReport);
+  const [loadingPreview, setLoadingPreview] = useState(
+    Boolean(initialReport.neonConfigured && !initialReport.onlineChecked)
+  );
   const [confirmOpen, setConfirmOpen] = useState(false);
   const [migrating, setMigrating] = useState(false);
   const [lastResult, setLastResult] = useState<MigrationRunResult | null>(null);
@@ -49,6 +54,9 @@ export function DatabaseMigrationPanel() {
   }, []);
 
   useEffect(() => {
+    if (!initialReport.neonConfigured || initialReport.onlineChecked) {
+      return;
+    }
     let active = true;
     fetch("/api/migration/neon")
       .then((res) => res.json())
@@ -57,7 +65,10 @@ export function DatabaseMigrationPanel() {
       })
       .catch(() => {
         if (active) {
-          notify.error("Could not check records", "Please refresh and try again.");
+          notify.error(
+            "Could not check records",
+            "Please refresh and try again."
+          );
         }
       })
       .finally(() => {
@@ -66,7 +77,7 @@ export function DatabaseMigrationPanel() {
     return () => {
       active = false;
     };
-  }, []);
+  }, [initialReport.neonConfigured, initialReport.onlineChecked]);
 
   const handleRunMigration = async () => {
     setMigrating(true);
@@ -99,23 +110,15 @@ export function DatabaseMigrationPanel() {
     }
   };
 
-  if (loadingPreview && !report) {
-    return (
-      <div className="space-y-4">
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-          <Skeleton className="h-28" />
-        </div>
-        <Skeleton className="h-80 w-full" />
-      </div>
-    );
-  }
+  const eventsStoreTables = report.tables.filter(
+    (t) => t.group === "Events & Store"
+  );
+  const sharedPortalTables = report.tables.filter(
+    (t) => t.group === "Shared Jamaat Portal"
+  );
 
-  const eventsStoreTables =
-    report?.tables.filter((t) => t.group === "Events & Store") ?? [];
-  const sharedPortalTables =
-    report?.tables.filter((t) => t.group === "Shared Jamaat Portal") ?? [];
+  const onlinePendingCheck =
+    report.neonConfigured && !report.onlineChecked && loadingPreview;
 
   return (
     <div className="space-y-6">
@@ -138,45 +141,59 @@ export function DatabaseMigrationPanel() {
         </div>
       </div>
 
-      {report ? (
-        <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
-          <StatTile
-            label="Online Jamaat Records"
-            value={
-              report.neonReachable
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-3">
+        <StatTile
+          label="Online Jamaat Records"
+          value={
+            onlinePendingCheck
+              ? "—"
+              : report.neonReachable
                 ? report.totalNeonRows.toLocaleString("en-IN")
                 : "Offline"
-            }
-            hint={
-              report.neonReachable
+          }
+          hint={
+            onlinePendingCheck
+              ? "Comparing live online counts..."
+              : report.neonReachable
                 ? "Total records found online"
                 : report.error || "Connection unavailable"
-            }
-            tone="brass"
-            icon={<Database className="h-5 w-5" />}
-          />
-          <StatTile
-            label="This Portal (Office Records)"
-            value={report.totalSqliteRows.toLocaleString("en-IN")}
-            hint="Records currently stored on this portal"
-            tone="maroon"
-            icon={<Database className="h-5 w-5" />}
-          />
-          <StatTile
-            label="Sync Readiness"
-            value={report.neonReachable ? "Ready" : "Needs Check"}
-            hint="Safe one-click sync anytime"
-            tone={report.neonReachable ? "sage" : "crimson"}
-            icon={
-              report.neonReachable ? (
-                <CheckCircle2 className="h-5 w-5" />
-              ) : (
-                <TriangleAlert className="h-5 w-5" />
-              )
-            }
-          />
-        </div>
-      ) : null}
+          }
+          tone="brass"
+          icon={<Database className="h-5 w-5" />}
+        />
+        <StatTile
+          label="This Portal (Office Records)"
+          value={report.totalSqliteRows.toLocaleString("en-IN")}
+          hint="Records currently stored on this portal"
+          tone="maroon"
+          icon={<Database className="h-5 w-5" />}
+        />
+        <StatTile
+          label="Sync Readiness"
+          value={
+            onlinePendingCheck
+              ? "Checking"
+              : report.neonReachable
+                ? "Ready"
+                : "Needs Check"
+          }
+          hint="Safe one-click sync anytime"
+          tone={
+            onlinePendingCheck
+              ? "brass"
+              : report.neonReachable
+                ? "sage"
+                : "crimson"
+          }
+          icon={
+            report.neonReachable ? (
+              <CheckCircle2 className="h-5 w-5" />
+            ) : (
+              <TriangleAlert className="h-5 w-5" />
+            )
+          }
+        />
+      </div>
 
       {lastResult ? (
         <Card className="border-[#B7DBC3] bg-[#F4FAF6]/80">
@@ -221,7 +238,7 @@ export function DatabaseMigrationPanel() {
           }
         />
         <CardBody className="space-y-6">
-          {report && !report.neonReachable ? (
+          {!onlinePendingCheck && !report.neonReachable ? (
             <div className="rounded-xl border border-[#EEC2C2] bg-[#FDF0F0] p-4 text-xs text-[#991B1B]">
               <strong>Could not connect to online database:</strong>{" "}
               {report.error ||
@@ -251,7 +268,9 @@ export function DatabaseMigrationPanel() {
                           {row.label}
                         </td>
                         <td className="px-3.5 py-2.5 text-right font-semibold text-[#78551B]">
-                          {row.neonCount.toLocaleString("en-IN")}
+                          {onlinePendingCheck
+                            ? "—"
+                            : row.neonCount.toLocaleString("en-IN")}
                         </td>
                         <td className="px-3.5 py-2.5 text-right font-semibold text-[#23583A]">
                           {row.sqliteCount.toLocaleString("en-IN")}
@@ -284,7 +303,9 @@ export function DatabaseMigrationPanel() {
                           {row.label}
                         </td>
                         <td className="px-3.5 py-2.5 text-right font-semibold text-[#78551B]">
-                          {row.neonCount.toLocaleString("en-IN")}
+                          {onlinePendingCheck
+                            ? "—"
+                            : row.neonCount.toLocaleString("en-IN")}
                         </td>
                         <td className="px-3.5 py-2.5 text-right font-semibold text-[#23583A]">
                           {row.sqliteCount.toLocaleString("en-IN")}
@@ -304,7 +325,7 @@ export function DatabaseMigrationPanel() {
           </span>
           <Button
             variant="primary"
-            disabled={!report?.neonReachable}
+            disabled={!report.neonReachable}
             loading={migrating}
             rightIcon={<ArrowRight className="h-4 w-4" />}
             onClick={() => setConfirmOpen(true)}

@@ -1,4 +1,3 @@
-import React, { Suspense } from "react";
 import Link from "next/link";
 import { connection } from "next/server";
 import { notFound } from "next/navigation";
@@ -8,16 +7,16 @@ import { requireServerPageAccess } from "@sezsec/rbac/rbac.server";
 import { EventBookingForm } from "@sezsec/events";
 import { getEventById } from "@sezsec/events/events.service";
 import { getPortalMasterSettings } from "@sezsec/settings/settings.service";
-import { PageHeader, Skeleton } from "@sezsec/ui";
+import { PageHeader } from "@sezsec/ui";
 
-async function EditEventContent({
-  paramsPromise,
+export default async function EditEventPage({
+  params,
 }: {
-  paramsPromise: Promise<{ id: string }>;
+  params: Promise<{ id: string }>;
 }) {
   await connection();
   const user = await requireServerPageAccess("/events/[id]/edit");
-  const { id } = await paramsPromise;
+  const { id } = await params;
   const decodedId = decodeURIComponent(id);
   const unlock = await getAmountUnlockStatus(user.id, user.canViewCharges);
 
@@ -46,6 +45,7 @@ async function EditEventContent({
       />
 
       <EventBookingForm
+        key={`${event.id}:${event.updatedAt}`}
         mode="edit"
         initialEvent={event}
         halls={master.halls}
@@ -54,24 +54,5 @@ async function EditEventContent({
         amountsUnlocked={unlock.unlocked}
       />
     </div>
-  );
-}
-
-export default function EditEventPage({
-  params,
-}: {
-  params: Promise<{ id: string }>;
-}) {
-  return (
-    <Suspense
-      fallback={
-        <div className="space-y-5">
-          <Skeleton className="h-20 w-full" />
-          <Skeleton className="h-96 w-full" />
-        </div>
-      }
-    >
-      <EditEventContent paramsPromise={params} />
-    </Suspense>
   );
 }

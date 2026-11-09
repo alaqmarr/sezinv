@@ -1,9 +1,22 @@
 "use client";
 
-import React, { useCallback, useEffect, useMemo, useRef, useState } from "react";
+import React, {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+} from "react";
 import { createPortal } from "react-dom";
 import { CalendarDays, ChevronLeft, ChevronRight } from "lucide-react";
-import { cn, formatIST, getMisriDate } from "@sezsec/shared";
+import {
+  cn,
+  formatIST,
+  getISTTodayString,
+  getMisriDate,
+  toISTDateKey,
+} from "@sezsec/shared";
 
 const MONTH_NAMES = [
   "January",
@@ -43,14 +56,25 @@ export function HijriDatePicker({
   const triggerRef = useRef<HTMLButtonElement>(null);
   const popoverRef = useRef<HTMLDivElement>(null);
 
+  useLayoutEffect(() => {
+    return () => {
+      setOpen(false);
+    };
+  }, []);
+
+  const dateValue = useMemo(
+    () => (value ? toISTDateKey(value) : ""),
+    [value]
+  );
+
   const initialParts = useMemo(() => {
-    if (/^\d{4}-\d{2}-\d{2}$/.test(value)) {
-      const [y, m] = value.split("-").map(Number);
-      return { year: y, month: m - 1 };
-    }
-    const now = new Date();
-    return { year: now.getFullYear(), month: now.getMonth() };
-  }, [value]);
+    const sourceKey =
+      dateValue && /^\d{4}-\d{2}-\d{2}$/.test(dateValue)
+        ? dateValue
+        : getISTTodayString();
+    const [y, m] = sourceKey.split("-").map(Number);
+    return { year: y, month: m - 1 };
+  }, [dateValue]);
 
   const [viewYear, setViewYear] = useState(initialParts.year);
   const [viewMonth, setViewMonth] = useState(initialParts.month);
@@ -116,13 +140,13 @@ export function HijriDatePicker({
   }, [open, updatePosition]);
 
   const selectedMisri = useMemo(
-    () => (value ? getMisriDate(value) : null),
-    [value]
+    () => (dateValue ? getMisriDate(dateValue) : null),
+    [dateValue]
   );
 
   const daysGrid = useMemo(() => {
-    const firstWeekday = new Date(viewYear, viewMonth, 1).getDay();
-    const totalDays = new Date(viewYear, viewMonth + 1, 0).getDate();
+    const firstWeekday = new Date(Date.UTC(viewYear, viewMonth, 1)).getUTCDay();
+    const totalDays = new Date(Date.UTC(viewYear, viewMonth + 1, 0)).getUTCDate();
     const cells: Array<{ dateKey: string; day: number; hijriDayAr: string } | null> = [];
 
     for (let i = 0; i < firstWeekday; i++) {
@@ -146,9 +170,9 @@ export function HijriDatePicker({
   }, [viewYear, viewMonth]);
 
   const stepMonth = (delta: number) => {
-    const next = new Date(viewYear, viewMonth + delta, 1);
-    setViewYear(next.getFullYear());
-    setViewMonth(next.getMonth());
+    const totalMonths = viewYear * 12 + viewMonth + delta;
+    setViewYear(Math.floor(totalMonths / 12));
+    setViewMonth(((totalMonths % 12) + 12) % 12);
   };
 
   return (
@@ -178,9 +202,9 @@ export function HijriDatePicker({
       >
         <div className="flex min-w-0 items-center gap-2.5 truncate">
           <CalendarDays className="h-4 w-4 shrink-0 text-[#6A1B1B]" />
-          {value ? (
+          {dateValue ? (
             <span className="truncate font-medium text-[#231917]">
-              {formatIST(value, "EEE, dd MMM yyyy")}
+              {formatIST(dateValue, "EEE, dd MMM yyyy")}
             </span>
           ) : (
             <span className="text-[#9E8E85]">Select date</span>
@@ -248,7 +272,7 @@ export function HijriDatePicker({
               <div className="grid grid-cols-7 gap-1">
                 {daysGrid.map((cell, i) => {
                   if (!cell) return <div key={`empty-${i}`} className="h-9.5" />;
-                  const isSelected = cell.dateKey === value;
+                  const isSelected = cell.dateKey === dateValue;
                   return (
                     <button
                       key={cell.dateKey}
